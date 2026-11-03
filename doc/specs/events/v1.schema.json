@@ -1,0 +1,51 @@
+{
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "lesson_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+    },
+    "lesson_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "type": {
+      "enum": ["started", "answered", "hint_used", "completed", "score"]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "activity_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 12000
+    },
+    "max_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 12000
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 86400000
+    }
+  },
+  "required": ["event_id", "schema_version", "lesson_id", "lesson_revision", "type", "timestamp"],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lessonbooks.invalid/schemas/event/1.0.0",
+  "title": "LessonEvent"
+}

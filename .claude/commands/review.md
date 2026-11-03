@@ -1,0 +1,1 @@
+Inspect the current diff and invoke schema-guardian, privacy-reviewer, security-reviewer, a11y-rtl-reviewer and pedagogy-reviewer on their relevant portions. Give each only necessary context. Report findings by severity and record reviewers that could not run. Do not merge or push. $ARGUMENTS

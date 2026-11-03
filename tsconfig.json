@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "jsx": "react-jsx",
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"],
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "backend/**/*.ts",
+    "site/**/*.ts",
+    "site/**/*.tsx",
+    "mobile/**/*.ts",
+    "mobile/**/*.tsx",
+    "doc/contracts/**/*.ts",
+    "*.ts"
+  ],
+  "exclude": ["**/node_modules", "**/dist", "mobile/android", "mobile/ios"]
+}

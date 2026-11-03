@@ -1,0 +1,327 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permissions": [
+    {
+      "action": "shell",
+      "resource": "*",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "npm test",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "npm run check",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "npm run check:fast",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "npm run lint",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "npm run typecheck",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "npm run build",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "npm run emulators",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "git status *",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "git diff *",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "git push --force *",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "git push -f *",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "rm *",
+      "effect": "deny"
+    },
+    {
+      "action": "external_directory",
+      "resource": "*",
+      "effect": "ask"
+    },
+    {
+      "action": "webfetch",
+      "resource": "*",
+      "effect": "ask"
+    },
+    {
+      "action": "websearch",
+      "resource": "*",
+      "effect": "ask"
+    },
+    {
+      "action": "read",
+      "resource": "*.env",
+      "effect": "deny"
+    },
+    {
+      "action": "edit",
+      "resource": "*.env",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*.env.*",
+      "effect": "deny"
+    },
+    {
+      "action": "edit",
+      "resource": "*.env.*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*.pem",
+      "effect": "deny"
+    },
+    {
+      "action": "edit",
+      "resource": "*.pem",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*service-account*",
+      "effect": "deny"
+    },
+    {
+      "action": "edit",
+      "resource": "*service-account*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*credentials*",
+      "effect": "deny"
+    },
+    {
+      "action": "edit",
+      "resource": "*credentials*",
+      "effect": "deny"
+    },
+    {
+      "action": "read",
+      "resource": "*.env.example",
+      "effect": "allow"
+    },
+    {
+      "action": "edit",
+      "resource": "*.env.example",
+      "effect": "allow"
+    },
+    {
+      "action": "edit",
+      "resource": "doc/contracts/generated/*",
+      "effect": "deny"
+    }
+  ],
+  "agents": {
+    "schema-guardian": {
+      "description": "Review lesson and event schema compatibility and versioning.",
+      "mode": "subagent",
+      "system": "Read .agents/agents/schema-guardian.md and follow it.",
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "webfetch",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "websearch",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "privacy-reviewer": {
+      "description": "Read-only review of family data, consent, tracking and deletion.",
+      "mode": "subagent",
+      "system": "Read .agents/agents/privacy-reviewer.md and follow it.",
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "webfetch",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "websearch",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "security-reviewer": {
+      "description": "Read-only review of authorization, uploads, model routing and WebView boundaries.",
+      "mode": "subagent",
+      "system": "Read .agents/agents/security-reviewer.md and follow it.",
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "webfetch",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "websearch",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "a11y-rtl-reviewer": {
+      "description": "Review lesson player keyboard access, semantics and RTL behavior.",
+      "mode": "subagent",
+      "system": "Read .agents/agents/a11y-rtl-reviewer.md and follow it.",
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "webfetch",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "websearch",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "pedagogy-reviewer": {
+      "description": "Review synthetic sample lessons for curriculum fit and answer correctness.",
+      "mode": "subagent",
+      "system": "Read .agents/agents/pedagogy-reviewer.md and follow it.",
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "webfetch",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "websearch",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "test-writer": {
+      "description": "Write and run meaningful tests for a specified code change.",
+      "mode": "subagent",
+      "system": "Read .agents/agents/test-writer.md and follow it."
+    },
+    "doc-keeper": {
+      "description": "Keep specifications, ADRs and milestones aligned with implementation.",
+      "mode": "subagent",
+      "system": "Read .agents/agents/doc-keeper.md and follow it."
+    }
+  },
+  "commands": {
+    "plan-task": {
+      "description": "LessonBooks plan-task",
+      "template": "Read AGENTS.md and relevant doc/specs. Inspect the requested change, then present scope, dependencies, implementation order, tests and definition of done. Wait for approval for non-trivial work. Task: $ARGUMENTS\n"
+    },
+    "check": {
+      "description": "LessonBooks check",
+      "template": "Run npm run check from the repository root. Report failures and missing prerequisites accurately; do not silently skip a suite. $ARGUMENTS\n"
+    },
+    "review": {
+      "description": "LessonBooks review",
+      "template": "Inspect the current diff and invoke schema-guardian, privacy-reviewer, security-reviewer, a11y-rtl-reviewer and pedagogy-reviewer on their relevant portions. Give each only necessary context. Report findings by severity and record reviewers that could not run. Do not merge or push. $ARGUMENTS\n"
+    },
+    "new-adr": {
+      "description": "LessonBooks new-adr",
+      "template": "Follow .agents/skills/write-adr/SKILL.md. Use npm run workflow -- new-adr with a plain-text title, then complete the decision. $ARGUMENTS\n"
+    },
+    "add-activity": {
+      "description": "LessonBooks add-activity",
+      "template": "Follow .agents/skills/add-activity-type/SKILL.md. Plan the schema, player, scoring, accessibility, fixture and versioning changes before implementation. $ARGUMENTS\n"
+    },
+    "eval-prompts": {
+      "description": "LessonBooks eval-prompts",
+      "template": "Follow .agents/skills/change-prompt/SKILL.md. Run npm run eval:prompts against the mocked client and report before/after rubric results. No paid calls. $ARGUMENTS\n"
+    },
+    "phase-status": {
+      "description": "LessonBooks phase-status",
+      "template": "Run npm run phase-status, inspect the implementation and latest check evidence, and compare each acceptance criterion with doc/milestones.md. Report implemented, pending and blocked items separately. $ARGUMENTS\n"
+    }
+  }
+}

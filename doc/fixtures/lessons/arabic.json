@@ -1,0 +1,274 @@
+{
+  "id": "arabic-counting",
+  "schema_version": "1.0.0",
+  "metadata": {
+    "title": {
+      "ar": "هيا نعد"
+    },
+    "subject": "mathematics",
+    "grade_id": "year-1",
+    "age_range": {
+      "min": 5,
+      "max": 7
+    },
+    "language": "ar",
+    "direction": "rtl",
+    "country": "GB-ENG",
+    "curriculum_id": "england-national-2014",
+    "curriculum_refs": ["year-1-number-addition-subtraction"],
+    "reading_level": "emerging",
+    "estimated_minutes": 8,
+    "learning_objectives": [
+      {
+        "ar": "عد الأعداد حتى ثلاثة واجمعها."
+      }
+    ]
+  },
+  "sections": [
+    {
+      "id": "explore",
+      "title": {
+        "ar": "لنستكشف الأعداد"
+      },
+      "blocks": [
+        {
+          "type": "text",
+          "text": {
+            "ar": "تفاحة واحدة وتفاحة أخرى تساوي تفاحتين."
+          }
+        },
+        {
+          "type": "tip",
+          "text": {
+            "ar": "يمكنك أن تعد على أصابعك."
+          }
+        }
+      ],
+      "activities": [
+        {
+          "id": "choose",
+          "type": "multiple_choice",
+          "prompt": {
+            "ar": "ما العدد الذي يأتي بعد اثنين؟"
+          },
+          "content": {
+            "options": [
+              {
+                "id": "one",
+                "text": {
+                  "ar": "واحد"
+                }
+              },
+              {
+                "id": "three",
+                "text": {
+                  "ar": "ثلاثة"
+                }
+              },
+              {
+                "id": "four",
+                "text": {
+                  "ar": "أربعة"
+                }
+              }
+            ],
+            "multiple": false
+          },
+          "correct_answers": ["three"],
+          "feedback": {
+            "correct": {
+              "ar": "أحسنت! إجابتك صحيحة."
+            },
+            "incorrect": {
+              "ar": "حاول مرة أخرى. عد كل عنصر مرة واحدة."
+            },
+            "hint": {
+              "ar": "ابدأ بالعدد واحد وعد ببطء."
+            }
+          },
+          "points": 4,
+          "difficulty": "easy",
+          "scoring": "partial"
+        },
+        {
+          "id": "truth",
+          "type": "true_false",
+          "prompt": {
+            "ar": "هل هذه العبارة صحيحة؟"
+          },
+          "content": {
+            "statement": {
+              "ar": "اثنان زائد واحد يساوي ثلاثة."
+            }
+          },
+          "correct_answers": true,
+          "feedback": {
+            "correct": {
+              "ar": "أحسنت! إجابتك صحيحة."
+            },
+            "incorrect": {
+              "ar": "حاول مرة أخرى. عد كل عنصر مرة واحدة."
+            },
+            "hint": {
+              "ar": "ابدأ بالعدد واحد وعد ببطء."
+            }
+          },
+          "points": 4,
+          "difficulty": "easy",
+          "scoring": "partial"
+        },
+        {
+          "id": "blank",
+          "type": "fill_in_the_blank",
+          "prompt": {
+            "ar": "أكمل الجمع."
+          },
+          "content": {
+            "blanks": [
+              {
+                "id": "sum",
+                "label": {
+                  "ar": "١ + ١ ="
+                }
+              }
+            ]
+          },
+          "correct_answers": {
+            "sum": ["2", "two", "٢", "اثنان"]
+          },
+          "feedback": {
+            "correct": {
+              "ar": "أحسنت! إجابتك صحيحة."
+            },
+            "incorrect": {
+              "ar": "حاول مرة أخرى. عد كل عنصر مرة واحدة."
+            },
+            "hint": {
+              "ar": "ابدأ بالعدد واحد وعد ببطء."
+            }
+          },
+          "points": 4,
+          "difficulty": "easy",
+          "scoring": "partial"
+        },
+        {
+          "id": "pairs",
+          "type": "drag_to_match",
+          "prompt": {
+            "ar": "صل كل كلمة بعددها."
+          },
+          "content": {
+            "left": [
+              {
+                "id": "two",
+                "text": {
+                  "ar": "اثنان"
+                }
+              },
+              {
+                "id": "three",
+                "text": {
+                  "ar": "ثلاثة"
+                }
+              }
+            ],
+            "right": [
+              {
+                "id": "n3",
+                "text": {
+                  "ar": "٣"
+                }
+              },
+              {
+                "id": "n2",
+                "text": {
+                  "ar": "٢"
+                }
+              }
+            ]
+          },
+          "correct_answers": {
+            "two": "n2",
+            "three": "n3"
+          },
+          "feedback": {
+            "correct": {
+              "ar": "أحسنت! إجابتك صحيحة."
+            },
+            "incorrect": {
+              "ar": "حاول مرة أخرى. عد كل عنصر مرة واحدة."
+            },
+            "hint": {
+              "ar": "ابدأ بالعدد واحد وعد ببطء."
+            }
+          },
+          "points": 4,
+          "difficulty": "easy",
+          "scoring": "partial"
+        },
+        {
+          "id": "groups",
+          "type": "categorize",
+          "prompt": {
+            "ar": "صنف هذه الأعداد."
+          },
+          "content": {
+            "items": [
+              {
+                "id": "one",
+                "text": {
+                  "ar": "١"
+                }
+              },
+              {
+                "id": "two",
+                "text": {
+                  "ar": "٢"
+                }
+              },
+              {
+                "id": "three",
+                "text": {
+                  "ar": "٣"
+                }
+              }
+            ],
+            "categories": [
+              {
+                "id": "small",
+                "text": {
+                  "ar": "أقل من ٣"
+                }
+              },
+              {
+                "id": "equal",
+                "text": {
+                  "ar": "يساوي ٣"
+                }
+              }
+            ]
+          },
+          "correct_answers": {
+            "one": "small",
+            "two": "small",
+            "three": "equal"
+          },
+          "feedback": {
+            "correct": {
+              "ar": "أحسنت! إجابتك صحيحة."
+            },
+            "incorrect": {
+              "ar": "حاول مرة أخرى. عد كل عنصر مرة واحدة."
+            },
+            "hint": {
+              "ar": "ابدأ بالعدد واحد وعد ببطء."
+            }
+          },
+          "points": 4,
+          "difficulty": "easy",
+          "scoring": "partial"
+        }
+      ]
+    }
+  ]
+}

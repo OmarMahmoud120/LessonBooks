@@ -1,0 +1,21 @@
+{
+  "id": "england-national-2014",
+  "country": "GB-ENG",
+  "language": "en-GB",
+  "name": "National Curriculum in England",
+  "source": "https://www.gov.uk/government/publications/national-curriculum-in-england-mathematics-programmes-of-study",
+  "grades": [
+    {
+      "id": "year-1",
+      "label": "Year 1",
+      "age_band": "5-7",
+      "subjects": ["mathematics"]
+    },
+    {
+      "id": "year-2",
+      "label": "Year 2",
+      "age_band": "6-8",
+      "subjects": ["mathematics"]
+    }
+  ]
+}

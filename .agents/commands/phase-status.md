@@ -1,0 +1,1 @@
+Run npm run phase-status, inspect the implementation and latest check evidence, and compare each acceptance criterion with doc/milestones.md. Report implemented, pending and blocked items separately. $ARGUMENTS

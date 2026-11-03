@@ -1,0 +1,274 @@
+{
+  "id": "english-counting",
+  "schema_version": "1.0.0",
+  "metadata": {
+    "title": {
+      "en-GB": "Counting together"
+    },
+    "subject": "mathematics",
+    "grade_id": "year-1",
+    "age_range": {
+      "min": 5,
+      "max": 7
+    },
+    "language": "en-GB",
+    "direction": "ltr",
+    "country": "GB-ENG",
+    "curriculum_id": "england-national-2014",
+    "curriculum_refs": ["year-1-number-addition-subtraction"],
+    "reading_level": "emerging",
+    "estimated_minutes": 8,
+    "learning_objectives": [
+      {
+        "en-GB": "Count and add numbers up to three."
+      }
+    ]
+  },
+  "sections": [
+    {
+      "id": "explore",
+      "title": {
+        "en-GB": "Explore numbers"
+      },
+      "blocks": [
+        {
+          "type": "text",
+          "text": {
+            "en-GB": "One apple and one more apple make two apples."
+          }
+        },
+        {
+          "type": "tip",
+          "text": {
+            "en-GB": "You can count on your fingers."
+          }
+        }
+      ],
+      "activities": [
+        {
+          "id": "choose",
+          "type": "multiple_choice",
+          "prompt": {
+            "en-GB": "Which number comes after two?"
+          },
+          "content": {
+            "options": [
+              {
+                "id": "one",
+                "text": {
+                  "en-GB": "One"
+                }
+              },
+              {
+                "id": "three",
+                "text": {
+                  "en-GB": "Three"
+                }
+              },
+              {
+                "id": "four",
+                "text": {
+                  "en-GB": "Four"
+                }
+              }
+            ],
+            "multiple": false
+          },
+          "correct_answers": ["three"],
+          "feedback": {
+            "correct": {
+              "en-GB": "Well done. You found the answer!"
+            },
+            "incorrect": {
+              "en-GB": "Try again. Count each item once."
+            },
+            "hint": {
+              "en-GB": "Start at one and count slowly."
+            }
+          },
+          "points": 4,
+          "difficulty": "easy",
+          "scoring": "partial"
+        },
+        {
+          "id": "truth",
+          "type": "true_false",
+          "prompt": {
+            "en-GB": "Is this statement true?"
+          },
+          "content": {
+            "statement": {
+              "en-GB": "Two plus one equals three."
+            }
+          },
+          "correct_answers": true,
+          "feedback": {
+            "correct": {
+              "en-GB": "Well done. You found the answer!"
+            },
+            "incorrect": {
+              "en-GB": "Try again. Count each item once."
+            },
+            "hint": {
+              "en-GB": "Start at one and count slowly."
+            }
+          },
+          "points": 4,
+          "difficulty": "easy",
+          "scoring": "partial"
+        },
+        {
+          "id": "blank",
+          "type": "fill_in_the_blank",
+          "prompt": {
+            "en-GB": "Complete the sum."
+          },
+          "content": {
+            "blanks": [
+              {
+                "id": "sum",
+                "label": {
+                  "en-GB": "1 + 1 ="
+                }
+              }
+            ]
+          },
+          "correct_answers": {
+            "sum": ["2", "two", "٢", "اثنان"]
+          },
+          "feedback": {
+            "correct": {
+              "en-GB": "Well done. You found the answer!"
+            },
+            "incorrect": {
+              "en-GB": "Try again. Count each item once."
+            },
+            "hint": {
+              "en-GB": "Start at one and count slowly."
+            }
+          },
+          "points": 4,
+          "difficulty": "easy",
+          "scoring": "partial"
+        },
+        {
+          "id": "pairs",
+          "type": "drag_to_match",
+          "prompt": {
+            "en-GB": "Match each word to its number."
+          },
+          "content": {
+            "left": [
+              {
+                "id": "two",
+                "text": {
+                  "en-GB": "Two"
+                }
+              },
+              {
+                "id": "three",
+                "text": {
+                  "en-GB": "Three"
+                }
+              }
+            ],
+            "right": [
+              {
+                "id": "n3",
+                "text": {
+                  "en-GB": "3"
+                }
+              },
+              {
+                "id": "n2",
+                "text": {
+                  "en-GB": "2"
+                }
+              }
+            ]
+          },
+          "correct_answers": {
+            "two": "n2",
+            "three": "n3"
+          },
+          "feedback": {
+            "correct": {
+              "en-GB": "Well done. You found the answer!"
+            },
+            "incorrect": {
+              "en-GB": "Try again. Count each item once."
+            },
+            "hint": {
+              "en-GB": "Start at one and count slowly."
+            }
+          },
+          "points": 4,
+          "difficulty": "easy",
+          "scoring": "partial"
+        },
+        {
+          "id": "groups",
+          "type": "categorize",
+          "prompt": {
+            "en-GB": "Sort these numbers."
+          },
+          "content": {
+            "items": [
+              {
+                "id": "one",
+                "text": {
+                  "en-GB": "1"
+                }
+              },
+              {
+                "id": "two",
+                "text": {
+                  "en-GB": "2"
+                }
+              },
+              {
+                "id": "three",
+                "text": {
+                  "en-GB": "3"
+                }
+              }
+            ],
+            "categories": [
+              {
+                "id": "small",
+                "text": {
+                  "en-GB": "Less than 3"
+                }
+              },
+              {
+                "id": "equal",
+                "text": {
+                  "en-GB": "Equal to 3"
+                }
+              }
+            ]
+          },
+          "correct_answers": {
+            "one": "small",
+            "two": "small",
+            "three": "equal"
+          },
+          "feedback": {
+            "correct": {
+              "en-GB": "Well done. You found the answer!"
+            },
+            "incorrect": {
+              "en-GB": "Try again. Count each item once."
+            },
+            "hint": {
+              "en-GB": "Start at one and count slowly."
+            }
+          },
+          "points": 4,
+          "difficulty": "easy",
+          "scoring": "partial"
+        }
+      ]
+    }
+  ]
+}

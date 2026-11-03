@@ -1,0 +1,1 @@
+Read AGENTS.md and relevant doc/specs. Inspect the requested change, then present scope, dependencies, implementation order, tests and definition of done. Wait for approval for non-trivial work. Task: $ARGUMENTS

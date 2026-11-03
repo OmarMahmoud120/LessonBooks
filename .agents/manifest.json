@@ -1,0 +1,58 @@
+{
+  "skills": [
+    "add-activity-type",
+    "add-curriculum",
+    "add-language",
+    "add-pipeline-stage",
+    "change-prompt",
+    "write-adr",
+    "privacy-review",
+    "release-checklist"
+  ],
+  "agents": [
+    {
+      "name": "schema-guardian",
+      "description": "Review lesson and event schema compatibility and versioning.",
+      "readOnly": true
+    },
+    {
+      "name": "privacy-reviewer",
+      "description": "Read-only review of family data, consent, tracking and deletion.",
+      "readOnly": true
+    },
+    {
+      "name": "security-reviewer",
+      "description": "Read-only review of authorization, uploads, model routing and WebView boundaries.",
+      "readOnly": true
+    },
+    {
+      "name": "a11y-rtl-reviewer",
+      "description": "Review lesson player keyboard access, semantics and RTL behavior.",
+      "readOnly": true
+    },
+    {
+      "name": "pedagogy-reviewer",
+      "description": "Review synthetic sample lessons for curriculum fit and answer correctness.",
+      "readOnly": true
+    },
+    {
+      "name": "test-writer",
+      "description": "Write and run meaningful tests for a specified code change.",
+      "readOnly": false
+    },
+    {
+      "name": "doc-keeper",
+      "description": "Keep specifications, ADRs and milestones aligned with implementation.",
+      "readOnly": false
+    }
+  ],
+  "commands": [
+    "plan-task",
+    "check",
+    "review",
+    "new-adr",
+    "add-activity",
+    "eval-prompts",
+    "phase-status"
+  ]
+}

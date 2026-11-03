@@ -1,0 +1,21 @@
+node_modules
+**/dist
+doc/contracts/generated
+mobile/assets/player
+mobile/android
+mobile/ios
+.agents/caveman
+.agents/ultracave
+.agents/agents
+.agents/skills
+.agents/commands
+.agents/manifest.json
+.claude
+.codex
+.opencode
+opencode.json
+**/CLAUDE.md
+Agent Prompt Interactive Kids Learning Books.md
+playwright-report
+test-results
+package-lock.json

@@ -1,0 +1,24 @@
+# API
+
+Proposed v1 surface; implementation and tests must be reconciled here as endpoints land.
+
+Parent requests use Authorization: Bearer <Firebase ID token>. Validate signature, audience, issuer and expiry using Admin SDK; derive parentId from verified claims. Never accept a request-selected owner. Local emulator tokens are accepted only in explicit emulator mode. Responses containing family data use Cache-Control: no-store.
+
+| Method/path                  | Purpose                                  |
+| ---------------------------- | ---------------------------------------- |
+| GET /health                  | non-sensitive liveness                   |
+| GET /v1/catalog              | public supported curricula               |
+| GET /v1/family               | parent's profile, consent and children   |
+| POST /v1/consents            | versioned consent choice                 |
+| POST /v1/kids                | validated minimal child profile          |
+| DELETE /v1/kids/:id          | cancellation and erasure                 |
+| DELETE /v1/account           | recent-auth account erasure              |
+| POST /v1/books               | bounded PDF upload; returns book/job IDs |
+| GET /v1/jobs/:id             | stage, progress and sanitized error      |
+| GET /v1/lessons              | own-family summaries                     |
+| GET /v1/lessons/:id          | private JSON for parent preview          |
+| POST /v1/lessons/:id/approve | approve exact current revision           |
+
+Use non-guessable IDs plus ownership checks. Reject unknown request fields, unsupported locale/curriculum combinations and invalid references. Upload type/magic, byte/page limits and rate limiting apply before costly parsing/model calls. A supplied idempotency key is scoped to parent and operation. Errors return safe codes, never raw provider responses or stack traces.
+
+The private worker endpoint requires a Cloud Tasks OIDC service identity and cannot be reached using a parent token. Site/mobile progress events are validated by the shared event schema; persistence and assignment-aware authorization arrive in Phase 2, not an unauthenticated ingestion shortcut.

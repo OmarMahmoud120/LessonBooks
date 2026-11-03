@@ -1,0 +1,19 @@
+{
+  "name": "@lessonbooks/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@lessonbooks/contracts": "*",
+    "@fastify/cors": "^11.1.0",
+    "@fastify/multipart": "^9.2.1",
+    "@fastify/rate-limit": "^10.3.0",
+    "@google-cloud/tasks": "^6.2.1",
+    "fastify": "^5.6.1",
+    "firebase-admin": "^13.5.0"
+  }
+}

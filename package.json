@@ -1,0 +1,56 @@
+{
+  "name": "lessonbooks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "backend",
+    "site",
+    "mobile",
+    "doc/contracts"
+  ],
+  "scripts": {
+    "dev": "node backend/scripts/dev.mjs",
+    "dev:mobile": "npm run start --workspace @lessonbooks/mobile",
+    "format": "prettier --write .",
+    "lint": "eslint . && prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test backend/tests/*.test.mjs && vitest run",
+    "check:fast": "npm run agents:check && npm run contracts:check && npm run typecheck && npm test",
+    "check": "npm run lint && npm run check:fast && npm run fixtures:check && npm run eval:prompts && npm run build && npm run test:player && npm run test:rules",
+    "build": "npm run build --workspace @lessonbooks/backend && npm run build --workspace @lessonbooks/site && npm run bundle:player --workspace @lessonbooks/mobile",
+    "agents:sync": "node backend/scripts/sync-agents.mjs",
+    "agents:check": "node backend/scripts/sync-agents.mjs --check && node --test backend/tests/agent*.test.mjs",
+    "contracts:generate": "tsx backend/scripts/generate-contracts.ts",
+    "contracts:check": "tsx backend/scripts/generate-contracts.ts --check",
+    "fixtures:check": "tsx backend/scripts/validate-fixtures.ts",
+    "eval:prompts": "tsx backend/eval/run.ts",
+    "test:player": "playwright test",
+    "test:rules": "firebase emulators:exec --project demo-lessonbooks --only auth,firestore,storage 'vitest run --config backend/infra/vitest.rules.config.ts'",
+    "emulators": "firebase emulators:start --project demo-lessonbooks --only auth,firestore,storage",
+    "workflow": "node backend/scripts/workflow.mjs",
+    "phase-status": "node backend/scripts/workflow.mjs phase-status",
+    "deploy": "node backend/scripts/deploy-gate.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@eslint/js": "^9.39.0",
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "eslint": "^9.39.0",
+    "firebase-tools": "^14.24.0",
+    "globals": "^16.5.0",
+    "json-schema-to-typescript": "^15.0.4",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2",
+    "vitest": "^3.2.4"
+  }
+}

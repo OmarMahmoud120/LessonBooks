@@ -1,0 +1,8 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // All family data goes through the authenticated API. Admin SDK bypasses rules;
+    // API tenancy tests are mandatory in addition to these rules tests.
+    match /{document=**} { allow read, write: if false; }
+  }
+}
