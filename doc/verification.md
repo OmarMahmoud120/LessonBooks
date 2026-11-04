@@ -19,7 +19,8 @@ Unit regressions cover duplicate worker delivery, bounded regeneration,
 cross-family access, deletion resurrection and a worker finishing after deletion.
 
 Offline Expo/Metro iOS JavaScript export also passed. This proves JavaScript
-bundling, not native iOS/Android WebView execution or screen-reader conformance.
+bundling, not native iOS execution or screen-reader conformance. Android native
+evidence is recorded separately below.
 
 One independent security/privacy review produced actionable findings that were
 fixed. Its follow-up hit the account usage limit. Full reviewer/native-agent
@@ -27,3 +28,22 @@ coverage is pending and is not inferred from scripted tests.
 
 No paid model calls, real family data, MCP connections, pushes or deployments.
 Remaining phase criteria and external decisions are recorded in milestones.md.
+
+## Android safe-area follow-up
+
+The full `npm run check` passed again after the mobile safe-area and explicit
+memory-auth change: 8 agent-policy tests, 22 unit tests, 8 browser tests, and
+3 Firebase emulator tests, plus lint, types, drift checks, fixtures, mocked
+prompt evaluation, and all builds. The host used Node v23.7.0 rather than the
+repository's declared >=24; this is not verification on the supported Node engine.
+
+The rebuilt Android debug APK passed the 25-action parent-preview journey on
+Pixel_8_35 (emulator-5554), including an owned PDF, native WebView correct-answer
+feedback, approval, and child deletion. Safe-area navigation was visually inspected.
+See [the native rerun report](android-native-rerun.md) for commands, screenshots,
+earlier failures, the dismissed Metro development warning, and remaining UI issues.
+
+Offline iOS JavaScript export passed with react-native-safe-area-context included.
+Native iOS, TalkBack, native RTL, release mode, and upload crash cleanup remain
+unverified. Full reviewer coverage remains pending. All test services were stopped;
+no physical-phone interactions, paid AI calls, pushes, or deployments occurred.

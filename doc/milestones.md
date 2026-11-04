@@ -34,7 +34,8 @@ vertical slice is implemented; the remaining criteria below prevent a full phase
 
 ## Remaining Phase 1 work and external gates
 
-- [ ] Native iOS/Android WebView execution, screen-reader checks and upload crash-residue cleanup.
+- [x] Native Android emulator journey: signup, consent, profile, owned PDF, WebView answer, approval and child deletion.
+- [ ] Native iOS WebView execution, native RTL/screen-reader checks and upload crash-residue cleanup.
 - [ ] OCR binaries/scanner verified, source image extraction, stronger source-language detection.
 - [ ] Cloud Tasks/OIDC/outbox transport and deployable Cloud Run packaging (local polling exists).
 - [ ] Approved real model/provider configuration, conservative live spend enforcement and live QA.
@@ -56,8 +57,10 @@ Phase 5: broader markets, game shells and subscriptions.
 
 Android CLI 1.1.16717390 built and installed the debug APK on Pixel_8_35
 (emulator-5554, arm64-v8a). JDK 21 resolved the initial Gradle/JDK 25 mismatch.
-Native verification is now attempted, but failed before sign-in: an initial Metro
-connection error was followed by a blank screen after reload. Login, PDF upload,
-WebView lessons, approval and deletion remain unverified on Android. See
-android-native-test.md and evidence/android/. The connected physical phone was
-not used. Do not mark the native-device milestone complete.
+The original attempt failed before sign-in: a Metro connection error was followed
+by a blank screen after reload (android-native-test.md). A cold launch with Metro
+ready restored sign-in. Native testing exposed system-bar overlap, now fixed with
+safe-area insets. The rebuilt APK passed all 25 parent-preview journey actions;
+see android-native-rerun.md and evidence/android/. The connected physical phone
+was not used. Native iOS, TalkBack, RTL, release-mode launch and crash cleanup
+remain unverified. This does not complete Phase 1.

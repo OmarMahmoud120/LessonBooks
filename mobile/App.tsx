@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
 import {
-  SafeAreaView,
   ScrollView,
   Text,
   TextInput,
   Button,
   View,
   StyleSheet,
+  StatusBar,
   Alert,
   Platform,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { initializeApp } from 'firebase/app';
 import {
-  getAuth,
+  initializeAuth,
+  inMemoryPersistence,
   connectAuthEmulator,
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -30,11 +32,24 @@ import { assertLesson, type Lesson } from '@lessonbooks/contracts';
 import { LessonPreview } from './src/LessonPreview';
 import { strings } from '../site/src/i18n';
 const host = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
-const auth = getAuth(initializeApp({ apiKey: 'demo-lessonbooks', projectId: 'demo-lessonbooks' }));
+// This synthetic preview intentionally signs out when the native process ends.
+const auth = initializeAuth(
+  initializeApp({ apiKey: 'demo-lessonbooks', projectId: 'demo-lessonbooks' }),
+  { persistence: inMemoryPersistence },
+);
 connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
 const t = strings.en;
 type Summary = { id: string; summary: string; revision: number; status: string };
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <StatusBar barStyle="dark-content" />
+      <ParentPreview />
+    </SafeAreaProvider>
+  );
+}
+
+function ParentPreview() {
   const [user, setUser] = useState<User | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

@@ -1,6 +1,9 @@
 # Journey: Android parent-to-lesson preview
 
-Date: 2026-11-04. Result: **FAILED during launch; sign-in was not reached**.
+Date: 2026-11-04. Original result: **FAILED during launch; sign-in was not reached**.
+
+Follow-up: [the fixed-build rerun](android-native-rerun.md) completed the native
+journey. This report preserves the original failure evidence.
 
 ## Environment
 
