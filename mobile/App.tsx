@@ -23,11 +23,7 @@ import {
   type User,
 } from 'firebase/auth';
 import * as DocumentPicker from 'expo-document-picker';
-// SDK 54 legacy source types conflict with exactOptionalPropertyTypes; contain the native adapter.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { deleteAsync } = require('expo-file-system/legacy') as {
-  deleteAsync(uri: string, options: { idempotent: boolean }): Promise<void>;
-};
+import { uploadCopies } from './src/nativeUploadCopies';
 import { assertLesson, type Lesson } from '@lessonbooks/contracts';
 import { LessonPreview } from './src/LessonPreview';
 import { strings } from '../site/src/i18n';
@@ -105,6 +101,9 @@ function ParentPreview() {
       setBusy(false);
     }
   }
+  useEffect(() => {
+    void uploadCopies.cleanup().catch(() => setStatus(t.error));
+  }, []);
   useEffect(
     () =>
       onAuthStateChanged(auth, (current) => {
@@ -264,20 +263,23 @@ function ParentPreview() {
                   title={t.choosePDF}
                   disabled={busy}
                   onPress={() =>
-                    void perform(async () => {
-                      const chosen = await DocumentPicker.getDocumentAsync({
-                        type: 'application/pdf',
-                        copyToCacheDirectory: true,
-                      });
-                      if (chosen.canceled) return;
-                      const file = chosen.assets[0]!;
-                      const data = new FormData();
-                      data.append('book', {
-                        uri: file.uri,
-                        name: 'book.pdf',
-                        type: 'application/pdf',
-                      } as unknown as Blob);
-                      try {
+                    void perform(() =>
+                      uploadCopies.run(async () => {
+                        const owner = auth.currentUser?.uid;
+                        const chosen = await DocumentPicker.getDocumentAsync({
+                          type: 'application/pdf',
+                          copyToCacheDirectory: true,
+                        });
+                        if (chosen.canceled) return;
+                        if (!owner || auth.currentUser?.uid !== owner)
+                          throw new Error('signed_out');
+                        const file = chosen.assets[0]!;
+                        const data = new FormData();
+                        data.append('book', {
+                          uri: file.uri,
+                          name: 'book.pdf',
+                          type: 'application/pdf',
+                        } as unknown as Blob);
                         await api(`/books?kid_id=${kid.id}`, {
                           method: 'POST',
                           headers: {
@@ -286,10 +288,8 @@ function ParentPreview() {
                           body: data,
                         });
                         setStatus(t.generating);
-                      } finally {
-                        await deleteAsync(file.uri, { idempotent: true });
-                      }
-                    })
+                      }),
+                    )
                   }
                 />
                 {lessons.map((lesson) => (

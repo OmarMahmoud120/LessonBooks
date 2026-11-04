@@ -13,8 +13,10 @@ Start root emulators and backend first. Parent mode supports email authenticatio
 consent confirmation, one profile, PDF selection, lesson review/approval and deletion.
 The preview WebView receives structured lesson data, receives no parent token, blocks
 external navigation/file access, and validates events against lesson/revision identity.
-Temporary upload copies are deleted in finally after an upload attempt. Device-crash
-cleanup, native iOS and screen-reader testing still need verification before real data.
+Temporary picker copies are cleared on startup and before/after each upload attempt.
+Cleanup is serialized with active uploads; failures surface through the error UI and
+retry on the next attempt or launch. Android seeded-residue recovery is verified in
+../doc/upload-cache-cleanup.md. Native iOS and screen-reader checks remain pending.
 The Android emulator parent-preview journey is recorded in ../doc/android-native-rerun.md.
 
 `npm run export:ios --workspace @lessonbooks/mobile` verifies JavaScript bundling.

@@ -28,12 +28,12 @@ vertical slice is implemented; the remaining criteria below prevent a full phase
 
 - [ ] Native smoke sessions for every role/command in each supported agent. Claude CLI is absent;
       a second independent review attempt hit the account usage limit. Adapter tests do not replace this.
-- [x] Final npm run check passes: 8 agent-policy, 22 unit, 8 browser and 3 emulator tests; see verification.md.
+- [x] Final npm run check passes: 8 agent-policy, 33 unit, 8 browser and 3 emulator tests; see verification.md.
 
 ## Remaining Phase 1 work and external gates
 
 - [x] Native Android emulator journey: signup, consent, profile, owned PDF, WebView answer, approval and child deletion.
-- [ ] Upload crash-residue cleanup.
+- [x] Upload-copy lifecycle cleanup, failure/race tests and Android seeded-residue startup recovery; see upload-cache-cleanup.md.
 - [ ] OCR binaries/scanner verified, source image extraction, stronger source-language detection.
 - [ ] Cloud Tasks/OIDC/outbox transport and deployable Cloud Run packaging (local polling exists).
 - [ ] Approved real model/provider configuration, conservative live spend enforcement and live QA.
@@ -49,7 +49,7 @@ real-model safety, source grounding or educational effectiveness.
 Deferred here by the user on 2026-11-04; these items no longer block ongoing
 Phase 0/1 implementation. They remain unverified and are not counted as completed.
 
-- [ ] Native iOS WebView execution and parent-preview journey.
+- [ ] Native iOS WebView execution, parent-preview journey and upload-cache recovery.
 - [ ] Native TalkBack/screen-reader and Arabic RTL checks.
 - [ ] Full reviewer coverage (schema, privacy/security, accessibility/RTL and pedagogy), beyond the
       completed independent security/privacy pass and automated component checks.
@@ -71,4 +71,6 @@ ready restored sign-in. Native testing exposed system-bar overlap, now fixed wit
 safe-area insets. The rebuilt APK passed all 25 parent-preview journey actions;
 see android-native-rerun.md and evidence/android/. The connected physical phone
 was not used. Native iOS, TalkBack, RTL, release-mode launch and crash cleanup
-remain unverified. This does not complete Phase 1.
+were unverified in that journey. Follow-up upload-cache-cleanup.md verifies Android
+seeded-residue startup recovery; real crash timing remains unverified. This does
+not complete Phase 1.

@@ -49,3 +49,13 @@ unverified. Native iOS, native screen-reader/RTL checks and remaining reviewer
 coverage are scheduled for the [polishing phase](milestones.md#polishing-phase).
 All test services were stopped;
 no physical-phone interactions, paid AI calls, pushes, or deployments occurred.
+
+## Upload-copy cleanup follow-up
+
+Full npm run check passed with 8 agent-policy, 33 unit, 8 browser and 3 Firebase
+emulator tests. Eleven new lifecycle tests cover failure, recovery, serialization
+and deletion boundaries. Android seeded-residue recovery and repeated startup
+passed with source/sibling checksums preserved; see [the focused report](upload-cache-cleanup.md).
+Actual OS-crash timing and native iOS recovery remain unverified. No full native
+parent journey was rerun for this change. The existing APK loaded updated JS from
+Metro; no new APK build was necessary.
