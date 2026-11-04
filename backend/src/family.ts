@@ -11,12 +11,14 @@ import {
   type LessonRecord,
 } from './domain';
 import { assertLesson } from '@lessonbooks/contracts';
+import { noopPublisher, type TaskPublisher } from './transport';
 
 export class FamilyService {
   constructor(
     readonly repo: Repository,
     readonly assets: Assets,
     private deleteIdentity: (uid: string) => Promise<void> = async () => {},
+    private publisher: TaskPublisher = noopPublisher,
   ) {}
   async ensureParent(uid: string) {
     return this.repo.atomic(async (tx) => {
@@ -132,18 +134,24 @@ export class FamilyService {
     });
     await this.assets.put(source, bytes, 'application/pdf');
     try {
-      return await this.repo.atomic(async (tx) => {
+      const created = await this.repo.atomic(async (tx) => {
         await this.active(tx, uid, kidId);
         const current = await tx.get<Book>(familyPath(uid, 'books', id));
         if (current) {
           if (current.sha256 !== digest || current.kid_id !== kidId)
             throw new DomainError('idempotency_conflict', 409);
-          return { book_id: id, job_id: id };
+          return { book_id: id, job_id: id, dispatch: false };
         }
         tx.put(familyPath(uid, 'books', id), book);
         tx.put(familyPath(uid, 'generation_jobs', id), job);
-        return { book_id: id, job_id: id };
+        return { book_id: id, job_id: id, dispatch: true };
       });
+      // Lost dispatch is recovered by the outbox sweeper; enqueue failure keeps the flag set.
+      if (created.dispatch)
+        await this.publisher.enqueue(uid, id, 'ingest:0:0').catch((error) => {
+          console.error('dispatch_enqueue_failed', error);
+        });
+      return { book_id: created.book_id, job_id: created.job_id };
     } catch (error) {
       // A concurrent deletion wins; remove the just-written source after failed ownership recheck.
       const retained = await this.repo.get<Book>(familyPath(uid, 'books', id));

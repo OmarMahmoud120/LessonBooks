@@ -14,6 +14,7 @@ import {
 import { FamilyService } from './family';
 import type { Ingestor, ExtractedBook } from './ingest';
 import { RoutedAI, type Accounting } from './ai';
+import { noopPublisher, type TaskPublisher } from './transport';
 
 export type Topic = { id: string; title: string; source_pages: number[] };
 export type Outline = { id: string; title: string };
@@ -29,7 +30,14 @@ export class Pipeline {
     private ingestor: Ingestor,
     private ai: RoutedAI,
     private now = Date.now,
+    private publisher: TaskPublisher = noopPublisher,
   ) {}
+  // Lost dispatch is recovered by the outbox sweeper; enqueue failure keeps the flag set.
+  private dispatch(uid: string, job: Job, token: string): void {
+    void this.publisher.enqueue(uid, job.id, token).catch((error) => {
+      console.error('dispatch_enqueue_failed', error);
+    });
+  }
   private async claim(uid: string, id: string): Promise<Job | undefined> {
     return this.families.repo.atomic(async (tx) => {
       const path = familyPath(uid, 'generation_jobs', id);
@@ -142,7 +150,7 @@ export class Pipeline {
           });
         }
       }
-      await family.repo.atomic(async (tx) => {
+      const outcome = await family.repo.atomic(async (tx) => {
         const path = familyPath(uid, 'generation_jobs', id);
         const current = await tx.get<Job>(path);
         await family.active(tx, uid, job.kid_id);
@@ -150,9 +158,10 @@ export class Pipeline {
           throw new DomainError('stale_worker');
         const nextIndex = STAGES.indexOf(job.stage) + 1;
         const complete = nextIndex === STAGES.length;
+        const nextStage = STAGES[nextIndex] ?? 'publish';
         const next: Job = {
           ...current,
-          stage: STAGES[nextIndex] ?? 'publish',
+          stage: nextStage,
           status: complete ? 'completed' : 'queued',
           progress: Math.round((nextIndex / STAGES.length) * 100),
           attempt: 0,
@@ -168,12 +177,15 @@ export class Pipeline {
           status: complete ? 'ready' : 'processing',
         });
         for (const record of published) tx.put(familyPath(uid, 'lessons', record.id), record);
+        return { nextStage, complete };
       });
+      if (outcome && !outcome.complete)
+        this.dispatch(uid, job, `${outcome.nextStage}:0:${job.fence}`);
       return true;
     } catch (error) {
       if (attemptPath) await family.assets.deletePrefix(attemptPath);
       const code = error instanceof DomainError ? error.code : 'generation_failed';
-      await family.repo.atomic(async (tx) => {
+      const outcome = await family.repo.atomic(async (tx) => {
         const path = familyPath(uid, 'generation_jobs', id);
         const current = await tx.get<Job>(path);
         if (!current || current.fence !== job.fence) return;
@@ -189,18 +201,24 @@ export class Pipeline {
             'unsupported_source_language',
             'invalid_job_references',
           ].includes(code);
+        const retryStage = repair ? 'generate' : current.stage;
+        const retryAttempt = repair ? 0 : current.attempt;
+        const retryable = !permanent && current.attempt < 3;
         tx.put(path, {
           ...current,
-          stage: repair ? 'generate' : current.stage,
-          attempt: repair ? 0 : current.attempt,
+          stage: retryStage,
+          attempt: retryAttempt,
           repair_count: repair ? (current.repair_count ?? 0) + 1 : (current.repair_count ?? 0),
           status: permanent || current.attempt >= 3 ? 'failed' : 'queued',
           error_code: code,
           lease_until: 0,
           next_attempt_at: this.now() + 1000 * 2 ** current.attempt,
-          outbox_pending: !permanent && current.attempt < 3,
+          outbox_pending: retryable,
         });
+        return { retryable, retryStage, retryAttempt, fence: current.fence };
       });
+      if (outcome?.retryable)
+        this.dispatch(uid, job, `${outcome.retryStage}:${outcome.retryAttempt}:${outcome.fence}`);
       return false;
     }
   }

@@ -71,6 +71,19 @@ Runtime settings: SERVICE_ROLE api/worker/all (host default all), HOST
 Emulator endpoints accept only loopback or the exact Compose emulators service
 with its expected port. Other destinations and live mode fail validation.
 
+Cloud runtime mode (CLOUD_RUNTIME_APPROVED=true) requires NODE_ENV=production, an
+explicit project, region (residency data), matching Cloud Tasks location and queue,
+an https worker URL, a least-privilege worker service account, separate SERVICE_ROLE
+values for api and worker, and forbids emulator endpoint variables. In cloud mode the
+API enqueues generation tasks with deterministic idempotent names, runs an outbox
+sweeper for lost dispatch and stalled leases, and the worker exposes
+POST /v1/internal/jobs/:uid/:jobId that accepts only Cloud Tasks OIDC tokens for the
+configured audience and service account; the poller is not used. Live AI stays
+refused in both modes. Cloud Run service templates live in backend/infra/cloudrun/
+and `npm run deploy` still fails by design until every decision in its checklist is
+recorded. Dispatch and verification are tested with injected fakes only; real Cloud
+Tasks delivery remains externally unverified.
+
 ## Verification
 
 2026-11-04: All four targets build from the pinned digests; `docker compose up --build -d --wait`

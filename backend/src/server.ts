@@ -11,12 +11,14 @@ import { Pipeline } from './pipeline';
 import { PDFIngestor } from './ingest';
 import { MockModelClient, RoutedAI, mockPolicy } from './ai';
 import { familyPath, type Parent, type Job } from './domain';
+import { CloudTasksOidcVerifier, createWorkerApp } from './worker';
+import { CloudTasksPublisher, OutboxSweeper } from './transport';
 
-// This remains emulator-only even when distributed as a production-shaped image.
+// Emulator mode keeps the local polling worker; cloud mode dispatches via Cloud Tasks.
 const config = runtimeConfig(process.env);
-const projectId = 'demo-lessonbooks';
-Object.assign(process.env, config.endpoints);
+const projectId = config.mode === 'cloud' ? config.projectId! : 'demo-lessonbooks';
 const firebase = initializeApp({ projectId, storageBucket: `${projectId}.appspot.com` });
+Object.assign(process.env, config.endpoints);
 const auth = getAuth(firebase);
 const repo = new FirestoreRepository(getFirestore(firebase));
 const assets = new StorageAssets(getStorage(firebase).bucket());
@@ -33,17 +35,27 @@ const pipeline = new Pipeline(
   new RoutedAI(new MockModelClient(), mockPolicy),
 );
 const app =
-  config.role === 'worker'
-    ? Fastify({ logger: false })
-    : await createAPI(families, async (token) => {
-        const identity = await auth.verifyIdToken(token, true);
-        return { uid: identity.uid, auth_time: identity.auth_time };
-      });
-if (config.role === 'worker')
+  config.mode === 'cloud' && config.role === 'worker'
+    ? createWorkerApp(
+        pipeline,
+        new CloudTasksOidcVerifier(config.workerUrl!, config.workerServiceAccount!),
+      )
+    : config.mode === 'cloud' && config.role === 'api'
+      ? await createAPI(families, async (token) => {
+          const identity = await auth.verifyIdToken(token, true);
+          return { uid: identity.uid, auth_time: identity.auth_time };
+        })
+      : config.role === 'worker'
+        ? Fastify({ logger: false })
+        : await createAPI(families, async (token) => {
+            const identity = await auth.verifyIdToken(token, true);
+            return { uid: identity.uid, auth_time: identity.auth_time };
+          });
+if (config.role === 'worker' && config.mode === 'emulator')
   app.get('/health', async () => ({ status: 'ok', mode: 'mock-worker' }));
 let running = false;
 const worker =
-  config.role === 'api'
+  config.mode === 'cloud' || config.role === 'api'
     ? undefined
     : setInterval(async () => {
         if (running) return;
@@ -69,8 +81,34 @@ const worker =
           running = false;
         }
       }, 1500);
+// Cloud API instances recover lost dispatch; Cloud Tasks carries every fresh enqueue.
+let sweeping = false;
+const sweeper =
+  config.mode === 'cloud' && config.role === 'api'
+    ? setInterval(async () => {
+        if (sweeping) return;
+        sweeping = true;
+        try {
+          const { CloudTasksClient } = await import('@google-cloud/tasks');
+          await new OutboxSweeper(
+            repo,
+            new CloudTasksPublisher(
+              new CloudTasksClient(),
+              config.queuePath!,
+              config.workerUrl!,
+              config.workerServiceAccount!,
+            ),
+          ).sweep();
+        } catch (error) {
+          console.error('outbox_sweep_failed', error);
+        } finally {
+          sweeping = false;
+        }
+      }, 60000)
+    : undefined;
 app.addHook('onClose', async () => {
   if (worker) clearInterval(worker);
+  if (sweeper) clearInterval(sweeper);
 });
 for (const signal of ['SIGINT', 'SIGTERM'] as const)
   process.once(signal, () => {
@@ -78,5 +116,9 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const)
   });
 await app.listen({ port: config.port, host: config.host });
 console.log(
-  `LessonBooks ${config.role}: port ${config.port} (emulators + mocked AI; synthetic content only)`,
+  `LessonBooks ${config.mode} ${config.role}: port ${config.port} (${
+    config.mode === 'cloud'
+      ? 'mocked AI; live provider remains gated'
+      : 'emulators + mocked AI; synthetic content only'
+  })`,
 );

@@ -42,7 +42,9 @@ vertical slice is implemented; the remaining criteria below prevent a full phase
       Docker tools smoke proves clamscan, rasterization and pinned tessdata_best English/Arabic
       OCR in the non-root worker; OCR-rasterized pages persist as family-scoped assets; per-page
       script detection plus explicit kid language replace the old Arabic rejection (ADR 0010).
-- [ ] Cloud Tasks/OIDC/outbox transport and deployable Cloud Run packaging (local polling exists).
+- [x] Cloud Tasks/OIDC/outbox transport implemented behind injectable publishers/verifiers with
+      fake-only tests, outbox/lease sweeper, deterministic idempotent task names and Cloud Run
+      service templates; real cloud delivery and deployment remain gated and unverified.
 - [ ] Approved real model/provider configuration, conservative live spend enforcement and live QA.
 - [x] Two-book mocked prompt evaluation across both grades; real-model before/after reports remain pending.
 - [ ] Region, retention/tombstone policy, legally sufficient parental consent and vendor processing review.
