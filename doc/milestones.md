@@ -27,6 +27,10 @@ vertical slice is implemented; the remaining criteria below prevent a full phase
       scanner-definition updater; smoke tests pass (doc/docker.md, ADR 0009).
 - [x] Arabic language plumbing end to end with mocked AI: explicit `ar` kid language, Arabic
       OCR via pinned best models, Arabic lesson fixture generation and RTL metadata (ADR 0010).
+- [x] Phase 2 first three verticals: up to four kids per family with child switching in both
+      UIs, a scrypt-hashed family PIN with server-side lockout gating the parent area plus an
+      open child play view, and assignments pinning approved revisions with kid-deletion sweep.
+      Remaining Phase 2: durable offline cache, queued progress events and dashboard.
 
 ## Remaining Phase 0 evidence
 
