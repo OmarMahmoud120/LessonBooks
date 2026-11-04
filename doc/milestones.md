@@ -29,13 +29,11 @@ vertical slice is implemented; the remaining criteria below prevent a full phase
 - [ ] Native smoke sessions for every role/command in each supported agent. Claude CLI is absent;
       a second independent review attempt hit the account usage limit. Adapter tests do not replace this.
 - [x] Final npm run check passes: 8 agent-policy, 22 unit, 8 browser and 3 emulator tests; see verification.md.
-- [ ] Full reviewer coverage (schema, privacy/security, accessibility/RTL and pedagogy), beyond the
-      completed independent security/privacy pass and automated component checks.
 
 ## Remaining Phase 1 work and external gates
 
 - [x] Native Android emulator journey: signup, consent, profile, owned PDF, WebView answer, approval and child deletion.
-- [ ] Native iOS WebView execution, native RTL/screen-reader checks and upload crash-residue cleanup.
+- [ ] Upload crash-residue cleanup.
 - [ ] OCR binaries/scanner verified, source image extraction, stronger source-language detection.
 - [ ] Cloud Tasks/OIDC/outbox transport and deployable Cloud Run packaging (local polling exists).
 - [ ] Approved real model/provider configuration, conservative live spend enforcement and live QA.
@@ -45,6 +43,16 @@ vertical slice is implemented; the remaining criteria below prevent a full phase
 No live family data, paid AI calls, MCP connections, pushes or deployments have been performed.
 The local entrypoint explicitly refuses production/live mode. Mocked validation is not evidence of
 real-model safety, source grounding or educational effectiveness.
+
+## Polishing phase
+
+Deferred here by the user on 2026-11-04; these items no longer block ongoing
+Phase 0/1 implementation. They remain unverified and are not counted as completed.
+
+- [ ] Native iOS WebView execution and parent-preview journey.
+- [ ] Native TalkBack/screen-reader and Arabic RTL checks.
+- [ ] Full reviewer coverage (schema, privacy/security, accessibility/RTL and pedagogy), beyond the
+      completed independent security/privacy pass and automated component checks.
 
 ## Deferred phases
 

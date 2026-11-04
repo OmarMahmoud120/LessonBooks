@@ -45,5 +45,7 @@ earlier failures, the dismissed Metro development warning, and remaining UI issu
 
 Offline iOS JavaScript export passed with react-native-safe-area-context included.
 Native iOS, TalkBack, native RTL, release mode, and upload crash cleanup remain
-unverified. Full reviewer coverage remains pending. All test services were stopped;
+unverified. Native iOS, native screen-reader/RTL checks and remaining reviewer
+coverage are scheduled for the [polishing phase](milestones.md#polishing-phase).
+All test services were stopped;
 no physical-phone interactions, paid AI calls, pushes, or deployments occurred.
