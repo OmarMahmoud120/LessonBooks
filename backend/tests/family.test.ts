@@ -176,6 +176,37 @@ describe('family boundaries and generation', () => {
       expect(lesson.metadata.title).toHaveProperty('ar');
     }
   });
+  it('keeps books and lessons scoped per kid and limits family size', async () => {
+    const { family, kid, repo } = await setup();
+    const second = await family.addKid('alice', { ...kidInput, nickname: 'Owl', avatar: 'owl' });
+    await family.addKid('alice', { ...kidInput, nickname: 'Cat', avatar: 'cat' });
+    await family.addKid('alice', { ...kidInput, nickname: 'Hawk', avatar: 'owl' });
+    await expect(
+      family.addKid('alice', { ...kidInput, nickname: 'Five', avatar: 'fox' }),
+    ).rejects.toThrow('kid_limit_reached');
+    const { job_id: jobA } = await family.upload(
+      'alice',
+      kid.id,
+      Buffer.from('%PDF-1.7 first'),
+      'kid-a-key-0001',
+    );
+    await family.upload('alice', second.id, Buffer.from('%PDF-1.7 second'), 'kid-b-key-0001');
+    const books = await repo.list<{ kid_id: string }>(familyPath('alice', 'books'));
+    expect(books.map((b) => b.kid_id).sort()).toEqual([kid.id, second.id].sort());
+    const pipeline = new Pipeline(
+      family,
+      new FixtureIngestor(),
+      new RoutedAI(new MockModelClient(), mockPolicy),
+    );
+    for (let stage = 0; stage < 6; stage++) await pipeline.run('alice', jobA);
+    const lessons = await repo.list<LessonRecord>(familyPath('alice', 'lessons'));
+    expect(lessons).toHaveLength(3);
+    expect(lessons.every((lesson) => lesson.kid_id === kid.id)).toBe(true);
+    await family.deleteKid('alice', kid.id);
+    expect(await family.repo.get(familyPath('alice', 'kids', second.id))).toMatchObject({
+      state: 'active',
+    });
+  });
   it('deletion wins over a worker that is still extracting content', async () => {
     const { family, kid, repo, assets } = await setup();
     const { job_id } = await family.upload(

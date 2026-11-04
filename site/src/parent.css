@@ -193,6 +193,24 @@ input[type='file'] {
   font-size: 48px;
   color: #687d59;
 }
+.kid-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.kid-switcher button {
+  border: 1px solid #d5dcce;
+  background: #fffefb;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 16px;
+  min-height: 44px;
+}
+.kid-switcher button[aria-pressed='true'] {
+  background: #687d59;
+  color: #fffefb;
+  border-color: #687d59;
+}
 .lesson-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

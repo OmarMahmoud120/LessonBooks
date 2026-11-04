@@ -69,14 +69,14 @@ export class FamilyService {
   async addKid(uid: string, input: Omit<Kid, 'id' | 'state'>) {
     const kid: Kid = { ...input, id: randomUUID(), state: 'active' };
     await this.repo.atomic(async (tx) => {
-      const parent = await tx.get<Parent & { primary_kid_id?: string }>(familyPath(uid));
+      const parent = await tx.get<Parent>(familyPath(uid));
       const consent = await tx.get<Consent>(
         familyPath(uid, 'consent_records', 'privacy-2026-11-03'),
       );
       if (!parent || parent.state !== 'active') throw new DomainError('family_unavailable', 409);
       if (!consent) throw new DomainError('consent_required', 409);
-      if (parent.primary_kid_id) throw new DomainError('phase_one_one_kid', 409);
-      tx.put(familyPath(uid), { ...parent, primary_kid_id: kid.id });
+      const kids = await tx.list(familyPath(uid, 'kids'));
+      if (kids.length >= 4) throw new DomainError('kid_limit_reached', 409);
       tx.put(familyPath(uid, 'kids', kid.id), kid);
     });
     return kid;
@@ -212,12 +212,6 @@ export class FamilyService {
     }
     await this.assets.deletePrefix(`families/${uid}/kids/${kidId}/`);
     await this.repo.atomic(async (tx) => {
-      const parent = await tx.get<Parent & { primary_kid_id?: string }>(familyPath(uid));
-      if (parent?.primary_kid_id === kidId) {
-        const clean = { ...parent };
-        delete clean.primary_kid_id;
-        tx.put(familyPath(uid), clean);
-      }
       tx.delete(familyPath(uid, 'kids', kidId));
     });
   }

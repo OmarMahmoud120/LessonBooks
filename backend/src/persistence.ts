@@ -3,6 +3,7 @@ import type { Bucket } from '@google-cloud/storage';
 
 export interface Transaction {
   get<T>(path: string): Promise<T | undefined>;
+  list<T>(path: string): Promise<T[]>;
   put<T extends object>(path: string, value: T): void;
   delete(path: string): void;
 }
@@ -43,6 +44,7 @@ export class MemoryRepository implements Repository {
     try {
       const result = await fn({
         get: <V>(p: string) => this.get<V>(p),
+        list: async <V>(p: string) => this.list<V>(p),
         put: (p, v) => {
           changes.set(p, structuredClone(v));
         },
@@ -92,6 +94,10 @@ export class FirestoreRepository implements Repository {
       const result = await fn({
         get: async <V>(path: string) =>
           (await native.get(this.db.doc(path))).data() as V | undefined,
+        list: async <V>(path: string) => {
+          const snapshot = await native.get(this.db.collection(path));
+          return snapshot.docs.map((d) => d.data() as V);
+        },
         put: (path, value) => {
           writes.push(() => {
             native.set(this.db.doc(path), value);

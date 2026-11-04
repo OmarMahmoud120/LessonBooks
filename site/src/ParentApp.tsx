@@ -23,7 +23,13 @@ const firebase = initializeApp({
 const auth = getAuth(firebase);
 connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
 type Kid = { id: string; nickname: string; grade_id: string };
-type Summary = { id: string; summary: string; status: 'draft' | 'approved'; revision: number };
+type Summary = {
+  id: string;
+  kid_id: string;
+  summary: string;
+  status: 'draft' | 'approved';
+  revision: number;
+};
 type Job = { id: string; stage: string; status: string; progress: number };
 export function ParentApp() {
   const [user, setUser] = useState<User | null>(null);
@@ -32,6 +38,8 @@ export function ParentApp() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [kids, setKids] = useState<Kid[]>([]);
+  const [selectedKidId, setSelectedKidId] = useState<string | null>(null);
+  const [addingKid, setAddingKid] = useState(false);
   const [consented, setConsented] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [rights, setRights] = useState(false);
@@ -47,6 +55,10 @@ export function ParentApp() {
     status: string;
     owner_uid: string;
   } | null>(null);
+  const selectedKid = kids.find((kid) => kid.id === selectedKidId) ?? kids[0] ?? null;
+  const kidLessons = selectedKid
+    ? lessons.filter((lesson) => lesson.kid_id === selectedKid.id)
+    : [];
   useEffect(
     () =>
       onAuthStateChanged(auth, (current) => {
@@ -78,6 +90,8 @@ export function ParentApp() {
     const family = await api<{ kids: Kid[]; consents: { type: string }[] }>('/family');
     if (!owner || owner !== auth.currentUser?.uid) return;
     setKids(family.kids);
+    if (!family.kids.some((kid) => kid.id === selectedKidId))
+      setSelectedKidId(family.kids[0]?.id ?? null);
     setConsented(
       ['privacy', 'content_rights'].every((type) => family.consents.some((c) => c.type === type)),
     );
@@ -241,7 +255,7 @@ export function ParentApp() {
         <main className="dashboard">
           <div className="dashboard-title">
             <span className="eyebrow">{t.parentSpace}</span>
-            <h1>{kids[0]?.nickname ? `${kids[0].nickname} · ${t.library}` : t.library}</h1>
+            <h1>{selectedKid ? `${selectedKid.nickname} · ${t.library}` : t.library}</h1>
             <p>{t.pages}</p>
           </div>
           {!consented ? (
@@ -281,13 +295,13 @@ export function ParentApp() {
                 {t.saveConsent}
               </button>
             </section>
-          ) : !kids.length ? (
+          ) : !kids.length || addingKid ? (
             <form
               className="parent-card profile-card"
               onSubmit={(event) => {
                 event.preventDefault();
                 void perform(async () => {
-                  await api('/kids', {
+                  const created = await api<{ id: string }>('/kids', {
                     method: 'POST',
                     body: JSON.stringify({
                       nickname,
@@ -300,6 +314,8 @@ export function ParentApp() {
                       reading_level: 'emerging',
                     }),
                   });
+                  setSelectedKidId(created.id);
+                  setAddingKid(false);
                   await refresh();
                 });
               }}
@@ -341,6 +357,22 @@ export function ParentApp() {
             </form>
           ) : (
             <>
+              {kids.length > 1 && (
+                <div className="kid-switcher" role="group" aria-label={t.children}>
+                  {kids.map((kid) => (
+                    <button
+                      key={kid.id}
+                      aria-pressed={kid.id === selectedKid?.id}
+                      onClick={() => setSelectedKidId(kid.id)}
+                    >
+                      {kid.nickname}
+                    </button>
+                  ))}
+                  <button className="add" onClick={() => setAddingKid(true)}>
+                    {t.addChild} +
+                  </button>
+                </div>
+              )}
               <section className="upload-card">
                 <div>
                   <span className="eyebrow">{t.pages}</span>
@@ -355,7 +387,7 @@ export function ParentApp() {
                       const data = new FormData();
                       data.append('book', file);
                       const created = await api<{ job_id: string }>(
-                        `/books?kid_id=${kids[0]!.id}`,
+                        `/books?kid_id=${selectedKid!.id}`,
                         {
                           method: 'POST',
                           headers: { 'Idempotency-Key': crypto.randomUUID() },
@@ -396,14 +428,14 @@ export function ParentApp() {
               )}
               <section className="library">
                 <h2>{t.library}</h2>
-                {!lessons.length ? (
+                {!kidLessons.length ? (
                   <div className="empty-state">
                     <span aria-hidden="true">✧</span>
                     <p>{t.empty}</p>
                   </div>
                 ) : (
                   <div className="lesson-grid">
-                    {lessons.map((lesson, index) => (
+                    {kidLessons.map((lesson, index) => (
                       <article className="lesson-tile" key={lesson.id}>
                         <span className="tile-number">{String(index + 1).padStart(2, '0')}</span>
                         <span className="status">
@@ -423,13 +455,14 @@ export function ParentApp() {
                   onClick={() => {
                     if (confirm(t.deleteConfirm))
                       void perform(async () => {
-                        await api(`/kids/${kids[0]!.id}`, { method: 'DELETE' });
+                        await api(`/kids/${selectedKid!.id}`, { method: 'DELETE' });
+                        setSelectedKidId(null);
                         setJob(null);
                         await refresh();
                       });
                   }}
                 >
-                  {t.deleteChild}
+                  {t.deleteChild.replace('{name}', selectedKid?.nickname ?? '')}
                 </button>
               </footer>
             </>

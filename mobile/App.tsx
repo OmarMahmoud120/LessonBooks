@@ -35,7 +35,13 @@ const auth = initializeAuth(
 );
 connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
 const t = strings.en;
-type Summary = { id: string; summary: string; revision: number; status: string };
+type Summary = {
+  id: string;
+  kid_id: string;
+  summary: string;
+  revision: number;
+  status: string;
+};
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -51,6 +57,7 @@ function ParentPreview() {
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
   const [kid, setKid] = useState<{ id: string; nickname: string } | null>(null);
+  const [kidsList, setKidsList] = useState<{ id: string; nickname: string }[]>([]);
   const [consent, setConsent] = useState(false);
   const [lessons, setLessons] = useState<Summary[]>([]);
   const [opened, setOpened] = useState<{
@@ -84,7 +91,8 @@ function ParentPreview() {
       consents: { type: string }[];
     }>('/family');
     if (!owner || owner !== auth.currentUser?.uid) return;
-    setKid(family.kids[0] ?? null);
+    setKidsList(family.kids);
+    setKid((current) => family.kids.find((k) => k.id === current?.id) ?? family.kids[0] ?? null);
     setConsent(
       ['privacy', 'content_rights'].every((type) => family.consents.some((c) => c.type === type)),
     );
@@ -258,6 +266,22 @@ function ParentPreview() {
             ) : (
               <>
                 <Text style={styles.heading}>{kid.nickname}</Text>
+                {kidsList.length > 1 && (
+                  <View
+                    style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
+                    accessibilityLabel={t.children}
+                  >
+                    {kidsList.map((candidate) => (
+                      <Button
+                        key={candidate.id}
+                        title={
+                          candidate.id === kid.id ? `• ${candidate.nickname}` : candidate.nickname
+                        }
+                        onPress={() => setKid(candidate)}
+                      />
+                    ))}
+                  </View>
+                )}
                 <Text>{t.uploadHelp}</Text>
                 <Button
                   title={t.choosePDF}
@@ -292,27 +316,29 @@ function ParentPreview() {
                     )
                   }
                 />
-                {lessons.map((lesson) => (
-                  <View key={lesson.id} style={styles.card}>
-                    <Text style={styles.heading}>{lesson.summary}</Text>
-                    <Text>{lesson.status === 'approved' ? t.approved : t.draft}</Text>
-                    <Button
-                      title={t.open}
-                      onPress={() =>
-                        void perform(async () => {
-                          const value = await api<{
-                            lesson: unknown;
-                            revision: number;
-                            status: string;
-                          }>(`/lessons/${lesson.id}`);
-                          assertLesson(value.lesson);
-                          if (auth.currentUser?.uid === user?.uid && user)
-                            setOpened({ ...value, lesson: value.lesson, owner_uid: user.uid });
-                        })
-                      }
-                    />
-                  </View>
-                ))}
+                {lessons
+                  .filter((lesson) => lesson.kid_id === kid?.id)
+                  .map((lesson) => (
+                    <View key={lesson.id} style={styles.card}>
+                      <Text style={styles.heading}>{lesson.summary}</Text>
+                      <Text>{lesson.status === 'approved' ? t.approved : t.draft}</Text>
+                      <Button
+                        title={t.open}
+                        onPress={() =>
+                          void perform(async () => {
+                            const value = await api<{
+                              lesson: unknown;
+                              revision: number;
+                              status: string;
+                            }>(`/lessons/${lesson.id}`);
+                            assertLesson(value.lesson);
+                            if (auth.currentUser?.uid === user?.uid && user)
+                              setOpened({ ...value, lesson: value.lesson, owner_uid: user.uid });
+                          })
+                        }
+                      />
+                    </View>
+                  ))}
                 <Button
                   title={t.deleteChild}
                   disabled={busy}
