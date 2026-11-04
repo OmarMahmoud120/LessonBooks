@@ -40,7 +40,8 @@
     "docker:down": "docker compose --env-file /dev/null down",
     "docker:logs": "docker compose --env-file /dev/null logs -f",
     "docker:test": "node backend/scripts/docker-smoke.mjs",
-    "eval:ocr": "node backend/eval/ocr-eval.mjs"
+    "eval:ocr": "node backend/eval/ocr-eval.mjs",
+    "eval:markdown": "node backend/eval/cloudflare-markdown.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
