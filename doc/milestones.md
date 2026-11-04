@@ -1,7 +1,8 @@
 # Milestones
 
-Updated: 2026-11-04. Phase 0 and Phase 1 are in progress. The local synthetic-content
-vertical slice is implemented; the remaining criteria below prevent a full phase-complete claim.
+Updated: 2026-11-05. Phase 0 and Phase 1 are in progress; Phase 2 is complete for the
+local synthetic scope. The local synthetic-content vertical slice is implemented; the
+remaining criteria below prevent a full phase-complete claim.
 
 ## Verified implementation
 
@@ -9,7 +10,8 @@ vertical slice is implemented; the remaining criteria below prevent a full phase
 - [x] Shared instructions, eight skills, seven roles/workflows and Codex/Claude/OpenCode adapters.
 - [x] Eight agent policy/adapter tests; deterministic generated-adapter checks.
 - [x] Canonical v1 lesson/event schemas, generated TypeScript and standalone validators.
-- [x] Three lesson fixtures, including Arabic RTL; two owned digital PDF fixtures.
+- [x] Three lesson fixtures, including Arabic RTL; four owned digital PDF fixtures and one
+      synthetic vocalized Arabic page image used by OCR/conversion evaluation.
 - [x] Parent Auth, consent confirmation, one minimal profile, PDF upload, progress, review/approval.
 - [x] Six typed stage functions, persisted attempts/leases/fences, duplicate delivery protection.
 - [x] Mocked decision-model routing and OpenRouter HTTP adapter with provider allowlists.
@@ -27,16 +29,23 @@ vertical slice is implemented; the remaining criteria below prevent a full phase
       scanner-definition updater; smoke tests pass (doc/docker.md, ADR 0009).
 - [x] Arabic language plumbing end to end with mocked AI: explicit `ar` kid language, Arabic
       OCR via pinned best models, Arabic lesson fixture generation and RTL metadata (ADR 0010).
-- [x] Phase 2 first three verticals: up to four kids per family with child switching in both
+- [x] Phase 2 all six verticals: up to four kids per family with child switching in both
       UIs, a scrypt-hashed family PIN with server-side lockout gating the parent area plus an
-      open child play view, and assignments pinning approved revisions with kid-deletion sweep.
-      Remaining Phase 2: durable offline cache, queued progress events and dashboard.
+      open child play view, assignments pinning approved revisions with kid-deletion sweep, a
+      durable localStorage event queue flushed on load/interval/connectivity, approved-lesson
+      and per-kid summary caching so play survives offline, and a per-child dashboard progress
+      card fed by the idempotent events aggregate.
+- [x] Cloudflare toMarkdown evaluated on four synthetic fixtures (doc/cloudflare-markdown-test.md):
+      text-bearing PDFs convert with extra heading noise, image-only PDFs yield no text, and the
+      image path returns a description rather than a transcription. Not adopted for ingestion.
 
 ## Remaining Phase 0 evidence
 
 - [ ] Native smoke sessions for every role/command in each supported agent. Claude CLI is absent;
       a second independent review attempt hit the account usage limit. Adapter tests do not replace this.
-- [x] Final npm run check passes: 8 agent-policy, 33 unit, 8 browser and 3 emulator tests; see verification.md.
+- [x] Current check evidence: 8 agent-policy plus 6 evaluator tests, 110 unit, 8 browser and
+      3 emulator tests; the rules suite ran directly because a user-started emulator held the
+      fixed ports. See verification.md.
 
 ## Remaining Phase 1 work and external gates
 
@@ -69,7 +78,7 @@ Phase 0/1 implementation. They remain unverified and are not counted as complete
 
 ## Deferred phases
 
-Phase 2: child switching, PIN/gate, assignments, durable offline cache, queued events and dashboard.
+Phase 2: implemented; see Verified implementation.
 Phase 3: additional launch curricula/languages and remaining five activities.
 Phase 4: parent editing/regeneration UI and expanded moderation/evaluation quality.
 Phase 5: broader markets, game shells and subscriptions.

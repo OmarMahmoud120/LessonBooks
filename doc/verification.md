@@ -59,3 +59,33 @@ passed with source/sibling checksums preserved; see [the focused report](upload-
 Actual OS-crash timing and native iOS recovery remain unverified. No full native
 parent journey was rerun for this change. The existing APK loaded updated JS from
 Metro; no new APK build was necessary.
+
+## Phase 2 verticals — 2026-11-05
+
+Lint, types, generated-contract/agent drift checks, fixtures, mocked prompt
+evaluation and all builds pass. The test run has 8 agent-policy plus 6 evaluator
+tests, 110 unit tests, 8 Playwright tests and 3 Firebase emulator tests. Ten new
+unit tests cover the durable event queue (order, 500-event bound, 50-event batches,
+failed flush retention, corrupt storage and unavailable storage) and the offline
+lesson/summary cache (revision keys, approved-only summaries and malformed entries).
+
+Backend tests cover multi-kid scoping and the four-kid limit, PIN set/verify with
+lockout, assignments pinning approved revisions with deletion sweep, and queued
+event ingestion with kid ownership, revision mismatch, batch bound and event_id
+deduplication. Browser tests are unchanged and do not exercise offline cache
+recovery end to end, dashboard rendering or the kid-view event path; those remain
+covered only by unit and API tests. No native device, live model, push or deployment
+was involved.
+
+`npm run check` itself could not run its emulator wrapper because a user-started
+emulator already held ports 8080/9099/9199. The rules suite was run directly against
+that emulator instance and passed 3/3; all earlier stages of `npm run check` passed.
+
+## Cloudflare Markdown evaluation — 2026-11-05
+
+The evaluator's six mocked tests pass. A user-run live batch of four synthetic
+fixtures returned HTTP 200 for all files: text-bearing PDFs convert but gain heading
+noise, the image-only PDF returns no text, and the image request returns an English
+description rather than a transcription (letter CER 8.37). The provider was not
+adopted for ingestion; details and limits are in
+[the evaluation report](cloudflare-markdown-test.md).
