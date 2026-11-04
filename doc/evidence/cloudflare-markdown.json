@@ -1,0 +1,55 @@
+{
+  "tested_at": "2026-11-04T21:31:31.960Z",
+  "provider": "cloudflare-tomarkdown",
+  "requests": 4,
+  "maximum_requests": 4,
+  "automatic_retries": 0,
+  "inputs": "repository-owned synthetic fixtures only",
+  "billed_cost": "not supplied by this endpoint; check account usage",
+  "results": [
+    {
+      "file": "counting.pdf",
+      "http_status": 200,
+      "elapsed_ms": 323,
+      "status": "ok",
+      "format": "markdown",
+      "text": "# counting.pdf\n## Contents\n### Page 1\nCount one, two, three. One and one make two. Two and one make three.\n\n",
+      "tokens": 27,
+      "stop": false,
+      "letter_cer": 0.48,
+      "diacritic_cer": 0.48
+    },
+    {
+      "file": "arabic-counting.pdf",
+      "http_status": 200,
+      "elapsed_ms": 372,
+      "status": "ok",
+      "format": "markdown",
+      "text": "# arabic-counting.pdf\n## Contents\n### Page 1\n# هيا نعد\n\n\nتفاحة واحدة وتفاحة أخرى تساوي تفاحتني.\n\n\nاثنان زائد واحد يساوي ثالثة.\n\n\nيمكنك أن تعد على أصابعك.\n\n\n",
+      "tokens": 39,
+      "stop": false
+    },
+    {
+      "file": "arabic-counting-scanned.pdf",
+      "http_status": 200,
+      "elapsed_ms": 799,
+      "status": "ok",
+      "format": "markdown",
+      "text": "# arabic-counting-scanned.pdf\n## Contents\n### Page 1\n\n\n",
+      "tokens": 14,
+      "stop": false
+    },
+    {
+      "file": "arabic-counting-vocalized.png",
+      "http_status": 200,
+      "elapsed_ms": 7609,
+      "status": "ok",
+      "format": "markdown",
+      "text": "### Image Description\n\n**Overview**\nA vertical, portrait-oriented image with a minimalist design. The composition consists of four lines of centered black Arabic text set against a stark, solid white background.\n\n**Typography and Style**\n* **Font:** The text is written in a clean, formal, and highly legible Arabic typeface, similar to Naskh.\n* **Diacritics:** Every word is fully vocalized with comprehensive diacritical marks (*tashkeel*), indicating this is likely an educational text for early learners.\n* **Alignment:** The text is centrally aligned on the page, creating a balanced and organized appearance.\n\n**Content Summary**\nThe text serves as a simple mathematical lesson teaching basic addition and counting.\n* **Line 1:** Introduces the sequence of numbers: one, two, and three.\n* **Line 2:** Uses a word problem involving fruit: \"one apple and another apple equals two apples.\"\n* **Line 3:** Presents a basic addition equation: \"two plus one equals three.\"\n* **Line 4:** Offers an encouraging instruction to the reader: \"you can count on your fingers.\"",
+      "tokens": 267,
+      "stop": false,
+      "letter_cer": 8.371134020618557,
+      "diacritic_cer": 4.666666666666667
+    }
+  ]
+}
