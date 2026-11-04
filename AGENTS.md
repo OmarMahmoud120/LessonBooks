@@ -71,3 +71,11 @@ checked where relevant; no unsupported claims of native-agent or device verifica
 documentation and generated artifacts match source; checks pass or blockers are explicit;
 small conventional commit created without pushing. Phase completion requires evidence in
 doc/milestones.md, not just scaffold files.
+
+## Current verification boundary
+
+The local entrypoint uses Firebase emulators and mocked AI. Native iOS JavaScript export
+uses `npm run export:ios --workspace @lessonbooks/mobile` (offline Expo, telemetry disabled).
+Client validators are generated standalone code; dynamic schema compilation belongs only in
+@lessonbooks/contracts/server. Preserve the player CSP without unsafe-eval. See
+doc/milestones.md for native-device, cloud transport, OCR/image and live-provider gaps.

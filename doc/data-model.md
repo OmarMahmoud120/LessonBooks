@@ -26,3 +26,5 @@ Use age bands, not birth years. Nicknames and educational progress are personal 
 Admin SDK bypasses rules. API and worker ownership tests are required; rules tests alone do not prove isolation. All referenced kid/book/job/lesson IDs must resolve under the authenticated parent namespace.
 
 Lesson status does not encode assignment; assignments are separate records. Approval pins an immutable revision. Deletion first marks family/kid deleting, rejects new work, cancels jobs, removes records and storage objects, then removes Auth on account deletion. Retry deletion safely; never allow a stale worker to resurrect data. Backup erasure deadlines and legal record retention need approval before launch.
+
+Implementation note (2026-11-04): deletion erases family collections/assets before removing Auth, then retains a minimal UID/state tombstone to reject already-authenticated in-flight requests. The local worker resumes roots marked deleting. Tombstone retention and any backup guarantees need legal review before live use.

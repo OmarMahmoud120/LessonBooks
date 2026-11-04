@@ -1,3 +1,4 @@
+import { generateValidators } from '@lessonbooks/contracts/server';
 import { compileFromFile } from 'json-schema-to-typescript';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -22,3 +23,15 @@ for (const kind of ['lesson', 'events']) {
   }
 }
 console.log(check ? 'Contracts match canonical schemas.' : 'Contracts generated.');
+
+for (const [name, content] of Object.entries({
+  'validators.cjs': generateValidators() + '\n',
+  'validators.d.cts':
+    'import type { ValidateFunction } from "ajv";\nexport const validateLesson: ValidateFunction;\nexport const validateEvent: ValidateFunction;\n',
+})) {
+  const output = resolve(root, 'doc/contracts/generated', name);
+  if (check) {
+    if ((await readFile(output, 'utf8').catch(() => '')) !== content)
+      throw new Error('Standalone validator drift');
+  } else await writeFile(output, content);
+}

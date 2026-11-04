@@ -13,3 +13,5 @@ Schema v1 documents ten variants. Phase 1 capability validation accepts only mul
 Versioning: breaking required fields or semantics require a new major schema version; additive supported variants need capability negotiation and a documented version change. Reject unknown versions rather than guessing. Generate deterministically and fail CI on drift.
 
 Future game shell: an optional versioned wrapper could describe theme, levels, lives and rewards independent of lesson correctness. No game shell runtime or arbitrary custom widgets in Phase 0/1.
+
+Client runtime validation now uses standalone generated validators so the player can run under a CSP without unsafe-eval. Dynamic schema compilation is confined to the backend/build-only @lessonbooks/contracts/server export. Both validator code and types are checked for generated drift.

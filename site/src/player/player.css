@@ -1,0 +1,253 @@
+:root {
+  color: #233d43;
+  background: #f8f5ee;
+  font-family:
+    ui-rounded,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-synthesis: none;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+select {
+  font: inherit;
+}
+button,
+select,
+input:not([type='radio']):not([type='checkbox']) {
+  min-height: 48px;
+  border: 1px solid #8a9994;
+  border-radius: 12px;
+  padding: 10px 16px;
+}
+button {
+  cursor: pointer;
+  background: #fffef9;
+  color: #233d43;
+  font-weight: 650;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 3px solid #bc531f;
+  outline-offset: 4px;
+}
+button.primary,
+.next {
+  color: #fff;
+  background: #244e47;
+  border-color: #244e47;
+}
+.lesson-player {
+  max-width: 780px;
+  margin: auto;
+  padding: 32px 24px 64px;
+}
+.lesson-header {
+  margin-block-end: 28px;
+}
+.eyebrow {
+  display: inline-block;
+  color: #385c52;
+  text-transform: uppercase;
+  font-weight: 750;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+h1 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(32px, 5vw, 48px);
+  line-height: 1.15;
+  font-weight: 500;
+  margin: 12px 0;
+}
+h2 {
+  line-height: 1.4;
+  font-size: 24px;
+}
+p {
+  line-height: 1.7;
+}
+progress {
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  border: none;
+  border-radius: 8px;
+  background: #e2e7dc;
+}
+progress::-webkit-progress-bar {
+  border-radius: 8px;
+  background: #e2e7dc;
+}
+progress::-webkit-progress-value {
+  border-radius: 8px;
+  background: #547259;
+}
+.content-card {
+  background: #ecefdf;
+  border: 1px solid #c9d2ba;
+  border-radius: 20px;
+  padding: 20px 28px;
+  margin-block-end: 20px;
+}
+.content-card h2 {
+  margin-top: 0;
+}
+.content-card p {
+  margin-block: 8px;
+}
+.tip {
+  border-inline-start: 3px solid #6d825f;
+  padding-inline-start: 14px;
+}
+.activity-card {
+  padding: 28px;
+  background: #fffefb;
+  border: 1px solid #d9ded0;
+  border-radius: 22px;
+  box-shadow: 0 8px 30px #1d3b2a06;
+}
+.step {
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: #52675f;
+  font-weight: 700;
+}
+fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+legend {
+  margin-block-end: 16px;
+  line-height: 1.6;
+}
+.options {
+  display: grid;
+  gap: 12px;
+}
+.option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid #b0bbae;
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 58px;
+  cursor: pointer;
+}
+.option.selected {
+  border: 2px solid #315e4f;
+  background: #edf3e7;
+  padding: 15px;
+}
+input[type='radio'],
+input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  accent-color: #315e4f;
+}
+.activity-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-block-start: 24px;
+}
+.feedback {
+  min-height: 32px;
+  padding-block: 12px;
+  line-height: 1.7;
+}
+.feedback.correct {
+  color: #265b3b;
+}
+.feedback.incorrect {
+  color: #8a3c21;
+}
+.next {
+  width: 100%;
+  text-align: center;
+}
+[dir='rtl'] .next span {
+  display: inline-block;
+  transform: rotate(180deg);
+}
+.blank-inputs {
+  display: grid;
+  gap: 14px;
+}
+.blank-inputs label {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.blank-inputs input {
+  max-width: 180px;
+}
+.match-list {
+  display: grid;
+  gap: 14px;
+}
+.match-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 20px;
+  align-items: center;
+}
+.match-row select {
+  max-width: 100%;
+  min-width: 0;
+  background: white;
+}
+.input-help {
+  font-size: 14px;
+  color: #52675f;
+}
+.complete {
+  text-align: center;
+  padding-block: 50px;
+}
+.sun {
+  color: #b85425;
+  font-size: 72px;
+}
+img {
+  max-width: 100%;
+  height: auto;
+}
+@media (max-width: 500px) {
+  .lesson-player {
+    padding: 24px 16px;
+  }
+  .activity-card,
+  .content-card {
+    padding: 20px;
+  }
+  .match-row {
+    gap: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

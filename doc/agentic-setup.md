@@ -24,3 +24,5 @@ Official references checked 2026-11-03: [Codex instructions](https://learn.chatg
 Do not copy permission shapes between tools. Verify supported events and fields before upgrading adapters. Native agent execution and independent reviews must be reported separately from scripted unit tests. The first doc-keeper invocation failed because the hosting account's subagent usage limit was reached; no review success is claimed.
 
 OpenCode v2 uses a local dependency-free policy plugin for permission and after-edit hooks. A supported blocking stop hook was not established in the v2 documentation; run `/check` before completion. Claude CLI is absent. No native model-driven reviewer run has been claimed. The eight adapter tests exercise mock hook callbacks and CLI entrypoints, not provider inference.
+
+2026-11-04 review evidence: an independent read-only security/privacy pass identified deletion resurrection, deletion recovery, stale mobile lesson responses, repeated invalid validation, and temporary upload retention. Fixes and backend regression tests were added. The follow-up review hit the account usage limit, so no independent re-verification is claimed.

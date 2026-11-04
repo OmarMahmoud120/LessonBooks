@@ -1,7 +1,19 @@
-# mobile
+# Mobile parent preview
 
-Read doc/architecture.md and doc/specs/events. Bundle the same site player artifact. WebView messages are untrusted; validate type, size and lesson identity. No arbitrary navigation, trackers or API keys. npm run dev:mobile starts local Expo; native builds need installed platform tooling.
+React Native with Expo SDK 54 local tooling. From root, run `npm run build` first
+so mobile/assets/player/player.json exists, then `npm run dev:mobile`. Set
+EXPO_NO_TELEMETRY=1 in your shell. Android emulators use 10.0.2.2 for local services;
+iOS simulators use 127.0.0.1. Physical-device networking is not configured.
 
-Run commands from the repository root. See ../doc/milestones.md for current implementation status.
+Start root emulators and backend first. Parent mode supports email authentication,
+consent confirmation, one profile, PDF selection, lesson review/approval and deletion.
+The preview WebView receives structured lesson data, receives no parent token, blocks
+external navigation/file access, and validates events against lesson/revision identity.
+Temporary upload copies are deleted in finally after an upload attempt. Device-crash
+cleanup and device/screen-reader testing still need verification before real data.
 
-Configuration is documented in .env.example where applicable; do not put real secrets in source. Dependency installation requires approval.
+`npm run export:ios --workspace @lessonbooks/mobile` verifies JavaScript bundling.
+Native builds use `npm run ios --workspace @lessonbooks/mobile` or the Android
+counterpart; these may install native dependencies and require separate approval.
+No kid mode, assignments, PIN gate, offline download manager or queued progress yet.
+Do not put secrets in mobile configuration. See ../doc/milestones.md.

@@ -1,39 +1,53 @@
 # Milestones
 
-Updated: 2026-11-03. Only Phase 0 and Phase 1 are authorized. A checklist records evidence, not a release claim.
+Updated: 2026-11-04. Phase 0 and Phase 1 are in progress. The local synthetic-content
+vertical slice is implemented; the remaining criteria below prevent a full phase-complete claim.
 
-## Phase 0 — in progress
+## Verified implementation
 
-- [x] Approved architecture and initial market defaults recorded.
-- [x] Git initialized; four product folders preserved.
-- [x] Shared AGENTS.md, eight skills, seven roles and seven workflows created.
-- [x] Eight agent-policy/adapter tests and seven contract/scoring tests pass; strict TypeScript and generated drift checks pass.
-- [ ] Native adapter validation, hook/workflow tests and review evidence complete.
-- [ ] Dependency lockfile, lint, strict type checks, unit tests and CI pass.
-- [x] Canonical lesson/event schemas, generated package and three fixtures validate.
-- [ ] Emulator rules tests and LTR/RTL accessibility checks pass.
-- [ ] All docs reconciled with implemented behavior; conventional foundation commits created.
+- [x] Git initialized; foundation commit 666e776; four product roots preserved.
+- [x] Shared instructions, eight skills, seven roles/workflows and Codex/Claude/OpenCode adapters.
+- [x] Eight agent policy/adapter tests; deterministic generated-adapter checks.
+- [x] Canonical v1 lesson/event schemas, generated TypeScript and standalone validators.
+- [x] Three lesson fixtures, including Arabic RTL; two owned digital PDF fixtures.
+- [x] Parent Auth, consent confirmation, one minimal profile, PDF upload, progress, review/approval.
+- [x] Six typed stage functions, persisted attempts/leases/fences, duplicate delivery protection.
+- [x] Mocked decision-model routing and OpenRouter HTTP adapter with provider allowlists.
+- [x] Bounded regeneration: at most two quality-repair transitions, tested with rejected output.
+- [x] Private publication, cross-family checks, child deletion and stale-worker deletion tests.
+- [x] Minimal account deletion tombstone; pending account deletion resumes in the local worker.
+- [x] First five player activities, keyboard controls, feedback, scoring and partial credit.
+- [x] Web/mobile share the player; WebView navigation/message boundaries and script-data escaping.
+- [x] LTR/RTL axe tests in desktop/mobile viewports and offline interaction after initial load.
+- [x] Real emulator test: Auth → owned PDF → three private drafts → approval → data erasure.
+- [x] Firestore/Storage rules deny direct private access for anonymous and signed-in clients.
+- [x] iOS JavaScript bundle export verified with Metro; this is not native-device execution.
+- [x] PDF text extraction runs in a timed worker with a bounded JavaScript heap.
 
-## Phase 1 — pending
+## Remaining Phase 0 evidence
 
-- [ ] Parent Auth, consent, one profile and family isolation work end to end.
-- [ ] Child/account erasure cancels work and removes related data.
-- [ ] Bounded/quarantined PDF ingestion and scanned-page path verified.
-- [ ] Persisted asynchronous jobs, retries and idempotency verified.
-- [ ] Decision-model routing, OpenRouter adapter and budget safeguards tested with mocks.
-- [ ] Sample PDF generates 3–5 validated private drafts.
-- [ ] First five activities work with keyboard, touch, feedback and RTL fixtures.
-- [ ] Parent preview/approval works on site and mobile using identical player artifact.
-- [ ] npm run check passes without skipped required suites.
-- [ ] Reviewer findings resolved; device/native testing limitations explicit.
+- [ ] Native smoke sessions for every role/command in each supported agent. Claude CLI is absent;
+      a second independent review attempt hit the account usage limit. Adapter tests do not replace this.
+- [x] Final npm run check passes: 8 agent-policy, 22 unit, 8 browser and 3 emulator tests; see verification.md.
+- [ ] Full reviewer coverage (schema, privacy/security, accessibility/RTL and pedagogy), beyond the
+      completed independent security/privacy pass and automated component checks.
 
-## External gates
+## Remaining Phase 1 work and external gates
 
-Live API spend, production provider allowlist/region, retention, legally appropriate consent and cloud deployment are not authorized. Mocked tests cannot prove actual model quality. Native-agent runtime checks need the corresponding installed tool; failed subagent invocation must not be counted as review.
+- [ ] Native iOS/Android WebView execution, screen-reader checks and upload crash-residue cleanup.
+- [ ] OCR binaries/scanner verified, source image extraction, stronger source-language detection.
+- [ ] Cloud Tasks/OIDC/outbox transport and deployable Cloud Run packaging (local polling exists).
+- [ ] Approved real model/provider configuration, conservative live spend enforcement and live QA.
+- [x] Two-book mocked prompt evaluation across both grades; real-model before/after reports remain pending.
+- [ ] Region, retention/tombstone policy, legally sufficient parental consent and vendor processing review.
 
-## Deferred
+No live family data, paid AI calls, MCP connections, pushes or deployments have been performed.
+The local entrypoint explicitly refuses production/live mode. Mocked validation is not evidence of
+real-model safety, source grounding or educational effectiveness.
 
-Phase 2: child profile switching, gate, assignments, durable offline cache, event sync and dashboards.
-Phase 3: additional launch language/curriculum and remaining activities.
-Phase 4: expanded evaluation, parent editing/regeneration and moderation quality.
+## Deferred phases
+
+Phase 2: child switching, PIN/gate, assignments, durable offline cache, queued events and dashboard.
+Phase 3: additional launch curricula/languages and remaining five activities.
+Phase 4: parent editing/regeneration UI and expanded moderation/evaluation quality.
 Phase 5: broader markets, game shells and subscriptions.

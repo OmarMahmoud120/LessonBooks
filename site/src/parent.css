@@ -1,0 +1,286 @@
+.site-header {
+  max-width: 1180px;
+  margin: auto;
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 20px 32px;
+  border-bottom: 1px solid #d7ddcf;
+}
+.brand {
+  font-size: 25px;
+  font-family: Georgia, serif;
+  color: #244e47;
+  text-decoration: none;
+  font-weight: bold;
+}
+.brand span {
+  color: #b9562d;
+  font-size: 33px;
+  vertical-align: middle;
+}
+.edition {
+  color: #52675f;
+  font-size: 13px;
+  flex: 1;
+}
+.development-notice {
+  text-align: center;
+  font-size: 12px;
+  padding: 10px;
+  background: #e9ecde;
+  color: #3d5548;
+}
+.welcome {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  align-items: center;
+  gap: 90px;
+  max-width: 1080px;
+  margin: 66px auto;
+  padding: 0 32px;
+}
+.welcome h1 {
+  max-width: 600px;
+  font-size: clamp(40px, 5vw, 66px);
+}
+.intro {
+  color: #52675f;
+  max-width: 440px;
+}
+.parent-card {
+  background: #fffefb;
+  border: 1px solid #d5dcce;
+  padding: 32px;
+  border-radius: 22px;
+}
+.parent-card h2 {
+  margin-top: 0;
+}
+.auth-card,
+.profile-card {
+  display: grid;
+  gap: 18px;
+}
+.parent-app label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.parent-app input,
+.parent-app select {
+  width: 100%;
+  background: white;
+  color: #233d43;
+}
+.small {
+  font-size: 13px;
+  color: #52675f;
+  line-height: 1.6;
+}
+.book-art {
+  height: 250px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 24px;
+}
+.book-left,
+.book-right {
+  width: 145px;
+  height: 185px;
+  background: #ebd2a2;
+  border: 1px solid #bba27b;
+  padding: 24px;
+  font:
+    34px Georgia,
+    serif;
+  color: #436146;
+  box-shadow:
+    0 14px 0 -8px #c4b08a,
+    0 20px 30px #31452c14;
+}
+.book-left {
+  transform: rotate(-7deg) skewY(-6deg);
+  border-radius: 8px 0 0 8px;
+  text-align: center;
+}
+.book-right {
+  transform: rotate(7deg) skewY(6deg);
+  border-radius: 0 8px 8px 0;
+  font-size: 54px;
+  text-align: center;
+  color: #a34d2d;
+}
+.leaf {
+  position: absolute;
+  inset-inline-end: 10px;
+  top: 5px;
+  font-size: 56px;
+  color: #6e8152;
+}
+.sample-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding-top: 15px;
+}
+.sample-links a {
+  color: #365c4e;
+  font-size: 14px;
+  text-underline-offset: 6px;
+  padding-block: 14px;
+}
+.dashboard {
+  max-width: 1100px;
+  margin: 40px auto;
+  padding: 0 32px;
+}
+.dashboard-title {
+  margin-bottom: 30px;
+}
+.upload-card {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 36px;
+  background: #e9eddc;
+  border: 1px solid #c8d1b7;
+  border-radius: 22px;
+  padding: 32px;
+}
+.upload-card form {
+  display: grid;
+  gap: 16px;
+}
+.upload-card h2 {
+  margin-block: 12px;
+}
+input[type='file'] {
+  max-width: 100%;
+  font-weight: normal;
+  font-size: 12px;
+}
+.parent-app .check-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-block: 20px;
+  line-height: 1.7;
+}
+.check-row input {
+  flex: 0 0 22px;
+  width: 22px;
+}
+.job-card {
+  margin-block: 24px;
+}
+.job-card h2 {
+  font-size: 18px;
+}
+.library {
+  margin-block: 40px;
+}
+.empty-state {
+  border: 1px dashed #aebca8;
+  border-radius: 20px;
+  padding: 40px;
+  text-align: center;
+}
+.empty-state span {
+  font-size: 48px;
+  color: #687d59;
+}
+.lesson-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.lesson-tile {
+  background: #fffefb;
+  border: 1px solid #d5dcce;
+  border-radius: 18px;
+  padding: 24px;
+}
+.tile-number {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  background: #f0dfbc;
+  border-radius: 12px;
+  font-family: Georgia, serif;
+  font-size: 22px;
+}
+.status {
+  display: block;
+  font-size: 12px;
+  margin-top: 18px;
+  color: #52675f;
+}
+.lesson-tile h3 {
+  font-family: Georgia, serif;
+  font-size: 25px;
+  font-weight: normal;
+  min-height: 62px;
+}
+.lesson-tile button {
+  width: 100%;
+}
+.data-controls {
+  border-top: 1px solid #d7ddcf;
+  padding-top: 25px;
+  font-size: 13px;
+}
+.delete-account {
+  margin-block: 24px;
+}
+.preview-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1000px;
+  margin: auto;
+  padding: 24px;
+}
+.error-banner {
+  margin: 20px auto;
+  max-width: 1000px;
+  background: #fae5d9;
+  border: 1px solid #b8562c;
+  padding: 16px;
+  border-radius: 12px;
+}
+@media (max-width: 760px) {
+  .welcome,
+  .upload-card {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .welcome {
+    margin-block: 35px;
+  }
+  .book-art {
+    height: 200px;
+  }
+  .edition {
+    display: none;
+  }
+  .site-header {
+    justify-content: space-between;
+    padding-inline: 24px;
+  }
+  .lesson-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard {
+    padding-inline: 20px;
+  }
+  .parent-card,
+  .upload-card {
+    padding: 24px;
+  }
+}

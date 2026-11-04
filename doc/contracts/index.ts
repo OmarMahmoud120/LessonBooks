@@ -1,5 +1,5 @@
-import { Ajv2020 } from 'ajv/dist/2020.js';
-import addFormats from 'ajv-formats';
+import type { ValidateFunction } from 'ajv';
+import { validateLesson as rawLesson, validateEvent as rawEvent } from './generated/validators.cjs';
 import lessonSchema from '../specs/lesson/v1.schema.json';
 import eventSchema from '../specs/events/v1.schema.json';
 import type { Lesson } from './generated/lesson';
@@ -10,10 +10,8 @@ export type ContentBlock = Lesson['sections'][number]['blocks'][number];
 export type LocalizedText = Lesson['metadata']['title'];
 export { lessonSchema, eventSchema };
 
-const ajv = new Ajv2020({ allErrors: true, strict: true });
-addFormats(ajv);
-export const validateLesson = ajv.compile<Lesson>(lessonSchema);
-export const validateEvent = ajv.compile<LessonEvent>(eventSchema);
+export const validateLesson = rawLesson as ValidateFunction<Lesson>;
+export const validateEvent = rawEvent as ValidateFunction<LessonEvent>;
 export const PHASE_ONE_TYPES = [
   'multiple_choice',
   'true_false',
@@ -34,7 +32,7 @@ export function normalizeAnswer(value: string): string {
 }
 export function assertLesson(value: unknown, phaseOne = true): asserts value is Lesson {
   if (!validateLesson(value))
-    throw new Error(`Invalid lesson schema: ${ajv.errorsText(validateLesson.errors)}`);
+    throw new Error(`Invalid lesson schema: ${JSON.stringify(validateLesson.errors)}`);
   const errors = semanticErrors(value, phaseOne);
   if (errors.length) throw new Error(`Invalid lesson semantics: ${errors.join('; ')}`);
 }

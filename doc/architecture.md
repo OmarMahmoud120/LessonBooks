@@ -27,3 +27,5 @@ Each stage persists input/output references and versioned state. Transactional c
 OpenRouter and its downstream providers are separate processors requiring review. Route policy limits models, providers, capabilities, cost and retries. Live AI is disabled by default. Mocked development is not a production moderation or learning-quality assessment.
 
 The player renders without network access when supplied its bundle, JSON and assets. Phase 2 adds assigned-lesson caching, profile locks and offline event delivery; Phase 1 does not expose an ungated kid mode.
+
+Implemented local transport uses a polling worker against the Firebase emulators. Cloud Tasks/outbox dispatch and IAM/OIDC delivery remain planned. The OpenRouter adapter and routing policy are tested through injected HTTP/model mocks; the local entrypoint refuses live mode. The shared player source is used by the website and its compiled static artifact by mobile. PDF text parsing is isolated in a worker thread with a timeout and heap limit; threads do not replace a production container sandbox.

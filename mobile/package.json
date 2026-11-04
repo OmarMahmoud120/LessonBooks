@@ -8,7 +8,8 @@
     "start": "expo start --offline",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "bundle:player": "node ../backend/scripts/bundle-player.mjs"
+    "bundle:player": "node ../backend/scripts/bundle-player.mjs",
+    "export:ios": "expo export --platform ios --output-dir dist"
   },
   "dependencies": {
     "@lessonbooks/contracts": "*",
