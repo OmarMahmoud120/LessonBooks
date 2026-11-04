@@ -39,7 +39,8 @@
     "docker:up": "docker compose --env-file /dev/null up --build -d --wait",
     "docker:down": "docker compose --env-file /dev/null down",
     "docker:logs": "docker compose --env-file /dev/null logs -f",
-    "docker:test": "node backend/scripts/docker-smoke.mjs"
+    "docker:test": "node backend/scripts/docker-smoke.mjs",
+    "eval:ocr": "node backend/eval/ocr-eval.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
