@@ -51,8 +51,9 @@ docker build -f backend/Dockerfile --target api -t lessonbooks-api:local .
 docker build -f backend/Dockerfile --target worker -t lessonbooks-worker:local .
 ```
 
-API contains built JavaScript and production npm dependencies, without a TS loader,
-source tree, emulator CLI or OCR tools. Worker adds pdftoppm/pdfimages, Tesseract with
+API contains built JavaScript, versioned prompts, the mock lesson fixture and
+production npm dependencies, without a TS loader, source tree, emulator CLI or OCR
+tools. Worker adds pdftoppm/pdfimages, Tesseract with
 English data, and clamscan/freshclam. Both run non-root. Compose uses read-only roots,
 bounded temporary storage and read-only worker scanner definitions. The worker has only the internal network and cannot reach the internet. The updater
 has a separate outbound network and no family-data access. API/emulators also use a
@@ -71,4 +72,10 @@ with its expected port. Other destinations and live mode fail validation.
 
 ## Verification
 
-Build and execution evidence will be recorded here after validation.
+2026-11-04: All four targets build from the pinned digests; `docker compose up --build -d --wait`
+reaches healthy api/worker with a completed signatures run. `npm run docker:test` passes the
+synthetic auth → consent → owned PDF → scanned ingestion → approval → deletion journey with the
+separated worker, and the native-tools smoke passes clamscan, rasterization and OCR in the
+non-root worker container. First validation failed twice before passing: the smoke script posted
+consents before the parent account existed, and the bundle read prompts plus the mock fixture
+from paths the image did not package; both are fixed and covered by the passing runs.

@@ -12,6 +12,7 @@ RUN npm ci --ignore-scripts --no-audit --no-fund --workspace @lessonbooks/backen
 FROM dependencies AS build
 COPY tsconfig.json ./
 COPY backend/src backend/src
+COPY backend/prompts backend/prompts
 COPY backend/scripts/build-runtime.mjs backend/scripts/build-runtime.mjs
 COPY doc/contracts doc/contracts
 COPY doc/curricula doc/curricula
@@ -27,6 +28,8 @@ WORKDIR /app
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=production-dependencies /app/doc/contracts/node_modules ./backend/node_modules
 COPY --from=build /app/backend/dist/runtime ./backend/dist/runtime
+COPY --from=build /app/backend/dist/prompts ./backend/dist/prompts
+COPY doc/fixtures/lessons ./backend/doc/fixtures/lessons
 COPY backend/infra/healthcheck.mjs ./healthcheck.mjs
 USER node
 EXPOSE 3001

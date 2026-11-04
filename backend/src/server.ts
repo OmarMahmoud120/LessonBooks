@@ -63,8 +63,8 @@ const worker =
                 await pipeline.run(parent.id, job.id);
             }
           }
-        } catch {
-          app.log.error('local_worker_failed');
+        } catch (error) {
+          console.error('local_worker_failed', error);
         } finally {
           running = false;
         }

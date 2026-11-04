@@ -8,6 +8,8 @@
 !backend/package.json
 !backend/src/
 !backend/src/**
+!backend/prompts/
+!backend/prompts/**
 !backend/scripts/
 !backend/scripts/build-runtime.mjs
 !backend/infra/
@@ -23,6 +25,9 @@
 !doc/specs/**
 !doc/curricula/
 !doc/curricula/**
+!doc/fixtures/
+!doc/fixtures/lessons/
+!doc/fixtures/lessons/*.json
 !site/
 !site/package.json
 !mobile/

@@ -29,6 +29,7 @@ async function api(path, options = {}) {
 }
 try {
   assert.equal((await fetch(base + '/family')).status, 401);
+  await api('/family');
   for (const type of ['privacy', 'content_rights'])
     await api('/consents', {
       method: 'POST',

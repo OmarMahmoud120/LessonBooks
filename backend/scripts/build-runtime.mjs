@@ -25,3 +25,5 @@ await build({
   ],
 });
 await cp('backend/src/pdf-worker.mjs', 'backend/dist/runtime/pdf-worker.mjs');
+// Versioned prompts sit one level above the bundle: ai.ts reads ../prompts from server.mjs.
+await cp('backend/prompts', 'backend/dist/prompts', { recursive: true });
