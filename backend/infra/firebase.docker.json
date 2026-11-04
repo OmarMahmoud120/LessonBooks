@@ -1,0 +1,12 @@
+{
+  "firestore": { "rules": "backend/infra/firestore.rules" },
+  "storage": { "rules": "backend/infra/storage.rules" },
+  "emulators": {
+    "auth": { "host": "0.0.0.0", "port": 9099 },
+    "firestore": { "host": "0.0.0.0", "port": 8080 },
+    "storage": { "host": "0.0.0.0", "port": 9199 },
+    "hub": { "host": "0.0.0.0", "port": 4400 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  }
+}

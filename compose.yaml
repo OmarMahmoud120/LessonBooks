@@ -1,0 +1,78 @@
+name: lessonbooks
+x-runtime: &runtime
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  cpus: 1.0
+  mem_limit: 768m
+  tmpfs:
+    - /tmp:size=256m,mode=1777
+  networks: [private]
+  stop_grace_period: 30s
+services:
+  emulators:
+    build: { context: ., dockerfile: backend/Dockerfile, target: emulators }
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1536m
+    pids_limit: 256
+    volumes: [emulator-data:/data]
+    ports:
+      - '127.0.0.1:9099:9099'
+      - '127.0.0.1:8080:8080'
+      - '127.0.0.1:9199:9199'
+    networks: [private, local]
+    stop_grace_period: 60s
+  signatures:
+    build: { context: ., dockerfile: backend/Dockerfile, target: worker }
+    entrypoint: [freshclam, --config-file=/app/freshclam.conf, --stdout]
+    volumes: [scanner-data:/var/lib/clamav]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    networks: [updates]
+    restart: 'no'
+  api:
+    <<: *runtime
+    build: { context: ., dockerfile: backend/Dockerfile, target: api }
+    environment: &local-env
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      FIREBASE_AUTH_EMULATOR_HOST: emulators:9099
+      FIRESTORE_EMULATOR_HOST: emulators:8080
+      FIREBASE_STORAGE_EMULATOR_HOST: emulators:9199
+      SERVICE_ROLE: api
+    networks: [private, local]
+    ports: ['127.0.0.1:3001:3001']
+    depends_on:
+      emulators: { condition: service_healthy }
+    develop:
+      watch:
+        - { action: rebuild, path: backend/src }
+        - { action: rebuild, path: doc/contracts }
+  worker:
+    <<: *runtime
+    build: { context: ., dockerfile: backend/Dockerfile, target: worker }
+    environment:
+      <<: *local-env
+      SERVICE_ROLE: worker
+      REQUIRE_SCAN: 'true'
+    mem_limit: 1536m
+    volumes: [scanner-data:/var/lib/clamav:ro]
+    depends_on:
+      emulators: { condition: service_healthy }
+      signatures: { condition: service_completed_successfully }
+    develop:
+      watch:
+        - { action: rebuild, path: backend/src }
+        - { action: rebuild, path: doc/contracts }
+networks:
+  private: { internal: true }
+  updates: {}
+  local: {}
+volumes:
+  emulator-data: {}
+  scanner-data: {}

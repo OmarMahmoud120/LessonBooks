@@ -33,7 +33,13 @@
     "emulators": "firebase emulators:start --project demo-lessonbooks --only auth,firestore,storage",
     "workflow": "node backend/scripts/workflow.mjs",
     "phase-status": "node backend/scripts/workflow.mjs phase-status",
-    "deploy": "node backend/scripts/deploy-gate.mjs"
+    "deploy": "node backend/scripts/deploy-gate.mjs",
+    "build:runtime": "node backend/scripts/build-runtime.mjs",
+    "docker:build": "docker compose --env-file /dev/null build",
+    "docker:up": "docker compose --env-file /dev/null up --build -d --wait",
+    "docker:down": "docker compose --env-file /dev/null down",
+    "docker:logs": "docker compose --env-file /dev/null logs -f",
+    "docker:test": "node backend/scripts/docker-smoke.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
@@ -43,6 +49,7 @@
     "@types/node": "^24.10.0",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
+    "esbuild": "0.28.2",
     "eslint": "^9.39.0",
     "firebase-tools": "^14.24.0",
     "globals": "^16.5.0",

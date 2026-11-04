@@ -1,3 +1,5 @@
+import Fastify from 'fastify';
+import { runtimeConfig } from './runtime-config';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -10,13 +12,10 @@ import { PDFIngestor } from './ingest';
 import { MockModelClient, RoutedAI, mockPolicy } from './ai';
 import { familyPath, type Parent, type Job } from './domain';
 
-// Emulator-only entrypoint. A cloud deployment needs explicit configuration/review.
+// This remains emulator-only even when distributed as a production-shaped image.
+const config = runtimeConfig(process.env);
 const projectId = 'demo-lessonbooks';
-if (process.env.NODE_ENV === 'production' || process.env.LIVE_AI_APPROVED === 'true')
-  throw new Error('Use reviewed cloud configuration before production/live AI.');
-process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
-process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
-process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
+Object.assign(process.env, config.endpoints);
 const firebase = initializeApp({ projectId, storageBucket: `${projectId}.appspot.com` });
 const auth = getAuth(firebase);
 const repo = new FirestoreRepository(getFirestore(firebase));
@@ -30,39 +29,54 @@ const families = new FamilyService(repo, assets, async (uid) => {
 });
 const pipeline = new Pipeline(
   families,
-  new PDFIngestor(false),
+  new PDFIngestor(config.requireScan),
   new RoutedAI(new MockModelClient(), mockPolicy),
 );
-const app = await createAPI(families, async (token) => {
-  const identity = await auth.verifyIdToken(token, true);
-  return { uid: identity.uid, auth_time: identity.auth_time };
-});
+const app =
+  config.role === 'worker'
+    ? Fastify({ logger: false })
+    : await createAPI(families, async (token) => {
+        const identity = await auth.verifyIdToken(token, true);
+        return { uid: identity.uid, auth_time: identity.auth_time };
+      });
+if (config.role === 'worker')
+  app.get('/health', async () => ({ status: 'ok', mode: 'mock-worker' }));
 let running = false;
-const worker = setInterval(async () => {
-  if (running) return;
-  running = true;
-  try {
-    for (const parent of await repo.list<Parent>('parents')) {
-      if (parent.state === 'deleting') {
-        await families.deleteAccount(parent.id);
-        continue;
-      }
-      if (parent.state !== 'active') continue;
-      for (const job of await repo.list<Job>(familyPath(parent.id, 'generation_jobs'))) {
-        if (job.status === 'queued' || (job.status === 'running' && job.lease_until < Date.now()))
-          await pipeline.run(parent.id, job.id);
-      }
-    }
-  } catch {
-    app.log.error('local_worker_failed');
-  } finally {
-    running = false;
-  }
-}, 1500);
+const worker =
+  config.role === 'api'
+    ? undefined
+    : setInterval(async () => {
+        if (running) return;
+        running = true;
+        try {
+          for (const parent of await repo.list<Parent>('parents')) {
+            if (parent.state === 'deleting') {
+              await families.deleteAccount(parent.id);
+              continue;
+            }
+            if (parent.state !== 'active') continue;
+            for (const job of await repo.list<Job>(familyPath(parent.id, 'generation_jobs'))) {
+              if (
+                job.status === 'queued' ||
+                (job.status === 'running' && job.lease_until < Date.now())
+              )
+                await pipeline.run(parent.id, job.id);
+            }
+          }
+        } catch {
+          app.log.error('local_worker_failed');
+        } finally {
+          running = false;
+        }
+      }, 1500);
 app.addHook('onClose', async () => {
-  clearInterval(worker);
+  if (worker) clearInterval(worker);
 });
-await app.listen({ port: 3001, host: '127.0.0.1' });
+for (const signal of ['SIGINT', 'SIGTERM'] as const)
+  process.once(signal, () => {
+    void app.close().then(() => process.exit(0));
+  });
+await app.listen({ port: config.port, host: config.host });
 console.log(
-  'LessonBooks API: http://127.0.0.1:3001 (emulators + mocked AI; synthetic content only)',
+  `LessonBooks ${config.role}: port ${config.port} (emulators + mocked AI; synthetic content only)`,
 );
