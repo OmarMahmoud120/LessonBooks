@@ -21,4 +21,8 @@ mobile/android/local.properties
 *.keystore
 *-adminsdk-*.json
 service-account*.json
+# Only the two repository-authored evaluation PDFs are tracked by default.
+doc/fixtures/books/*.pdf
+!doc/fixtures/books/counting.pdf
+!doc/fixtures/books/addition.pdf
 
