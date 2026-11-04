@@ -149,7 +149,18 @@ function ParentPreview() {
             }
           />
         </View>
-        <LessonPreview lesson={opened.lesson} revision={opened.revision} />
+        <LessonPreview
+          lesson={opened.lesson}
+          revision={opened.revision}
+          onEvent={(event) =>
+            void perform(async () => {
+              await api('/events', {
+                method: 'POST',
+                body: JSON.stringify({ events: [event] }),
+              });
+            })
+          }
+        />
       </SafeAreaView>
     );
   return (

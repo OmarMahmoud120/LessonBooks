@@ -12,6 +12,15 @@ import {
 import { assertLesson, type Lesson } from '@lessonbooks/contracts';
 import { Player } from './player/Player';
 import { strings } from './i18n';
+import {
+  cacheKidLessons,
+  cacheLesson,
+  enqueueEvent,
+  flushQueue,
+  loadCachedKidLessons,
+  loadCachedLesson,
+  type CachedSummary,
+} from './progress';
 import './parent.css';
 
 const t = strings.en;
@@ -56,6 +65,17 @@ export function ParentApp() {
   const [file, setFile] = useState<File | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [lessons, setLessons] = useState<Summary[]>([]);
+  const [progress, setProgress] = useState<{
+    kid_id: string;
+    lessons: {
+      lesson_id: string;
+      started: number;
+      completed: number;
+      score: number;
+      max_score: number;
+      last_client_at: string;
+    }[];
+  } | null>(null);
   const [assignments, setAssignments] = useState<
     { id: string; kid_id: string; lesson_id: string; revision: number }[]
   >([]);
@@ -68,6 +88,9 @@ export function ParentApp() {
   const selectedKid = kids.find((kid) => kid.id === selectedKidId) ?? kids[0] ?? null;
   const kidLessons = selectedKid
     ? lessons.filter((lesson) => lesson.kid_id === selectedKid.id)
+    : [];
+  const cachedKidLessons = selectedKid
+    ? loadCachedKidLessons().filter((lesson) => lesson.kid_id === selectedKid.id)
     : [];
   useEffect(
     () =>
@@ -116,15 +139,31 @@ export function ParentApp() {
       ['privacy', 'content_rights'].every((type) => family.consents.some((c) => c.type === type)),
     );
     const summaries = await api<Summary[]>('/lessons');
-    if (owner === auth.currentUser?.uid) setLessons(summaries);
+    if (owner === auth.currentUser?.uid) {
+      setLessons(summaries);
+      cacheKidLessons(summaries as CachedSummary[]);
+    }
     const list =
       await api<{ id: string; kid_id: string; lesson_id: string; revision: number }[]>(
         '/assignments',
       );
     if (owner === auth.currentUser?.uid) setAssignments(list);
+    if (owner === auth.currentUser?.uid && selectedKidId) {
+      setProgress(await api(`/kids/${selectedKidId}/progress`));
+    } else setProgress(null);
   }
   useEffect(() => {
     if (user) void refresh().catch(() => setError(t.error));
+  }, [user]);
+  useEffect(() => {
+    if (!user) return;
+    flush();
+    const timer = setInterval(flush, 10000);
+    window.addEventListener('online', flush);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('online', flush);
+    };
   }, [user]);
   useEffect(() => {
     if (!job || ['completed', 'failed', 'cancelled'].includes(job.status)) return;
@@ -150,15 +189,34 @@ export function ParentApp() {
     }
   }
   async function open(record: Summary) {
-    const value = await api<{ lesson: unknown; revision: number; status: string }>(
-      `/lessons/${record.id}`,
-    );
+    let value: { lesson: unknown; revision: number; status: string };
+    try {
+      value = await api<{ lesson: unknown; revision: number; status: string }>(
+        `/lessons/${record.id}`,
+      );
+      if (record.status === 'approved') cacheLesson(record.id, record.revision, value.lesson);
+    } catch {
+      const cached = loadCachedLesson(record.id, record.revision);
+      if (!cached) throw new Error('lesson_unavailable_offline');
+      value = { lesson: cached, revision: record.revision, status: record.status };
+    }
     assertLesson(value.lesson);
     if (auth.currentUser?.uid === user?.uid && user)
       setOpened({ ...value, lesson: value.lesson, owner_uid: user.uid });
   }
   const assignedForKid = (lessonId: string) =>
     assignments.some((a) => a.kid_id === selectedKid?.id && a.lesson_id === lessonId);
+  function flush() {
+    void perform(async () => {
+      await flushQueue(async (batch) =>
+        api('/events', { method: 'POST', body: JSON.stringify({ events: batch }) }),
+      );
+    });
+  }
+  function recordEvent(event: Parameters<typeof enqueueEvent>[0]) {
+    enqueueEvent(event);
+    flush();
+  }
   function unlockParentArea() {
     setUnlocked(true);
     sessionStorage.setItem('lessonbooks-parent-unlocked', '1');
@@ -211,6 +269,7 @@ export function ParentApp() {
           key={`${opened.lesson.id}-${opened.revision}`}
           lesson={opened.lesson}
           revision={opened.revision}
+          {...(kidView ? { onEvent: recordEvent } : {})}
         />
       </div>
     );
@@ -365,7 +424,12 @@ export function ParentApp() {
               )}
               <p>{t.kidPlayHelp}</p>
               {(() => {
-                const approved = kidLessons.filter((lesson) => lesson.status === 'approved');
+                const approved = [
+                  ...kidLessons.filter((lesson) => lesson.status === 'approved'),
+                  ...cachedKidLessons.filter(
+                    (cached) => !kidLessons.some((lesson) => lesson.id === cached.id),
+                  ),
+                ];
                 const assigned = approved.filter((lesson) =>
                   assignments.some((a) => a.kid_id === selectedKid.id && a.lesson_id === lesson.id),
                 );
@@ -570,6 +634,23 @@ export function ParentApp() {
                   </h2>
                   <progress value={job.progress} max={100} aria-label={t.generating} />
                   <span>{job.progress}%</span>
+                </section>
+              )}
+              {progress && progress.lessons.length > 0 && (
+                <section className="parent-card progress-card">
+                  <h2>{t.progressTitle}</h2>
+                  <ul>
+                    {progress.lessons.map((entry) => {
+                      const lesson = lessons.find((item) => item.id === entry.lesson_id);
+                      return (
+                        <li key={entry.lesson_id}>
+                          {lesson?.summary ?? entry.lesson_id} —{' '}
+                          {t.completedCount.replace('{count}', String(entry.completed))} ·{' '}
+                          {Math.round((entry.score / Math.max(entry.max_score, 1)) * 100)}%
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </section>
               )}
               <section className="library">
