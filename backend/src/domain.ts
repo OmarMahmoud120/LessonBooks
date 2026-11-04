@@ -71,6 +71,14 @@ export type Job = {
   policy_version: string;
   outbox_pending: boolean;
 };
+export type Assignment = {
+  id: string;
+  kid_id: string;
+  lesson_id: string;
+  revision: number;
+  assigned_by: string;
+  assigned_at: string;
+};
 export type LessonRecord = {
   id: string;
   kid_id: string;

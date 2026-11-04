@@ -56,6 +56,9 @@ export function ParentApp() {
   const [file, setFile] = useState<File | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [lessons, setLessons] = useState<Summary[]>([]);
+  const [assignments, setAssignments] = useState<
+    { id: string; kid_id: string; lesson_id: string; revision: number }[]
+  >([]);
   const [opened, setOpened] = useState<{
     lesson: Lesson;
     revision: number;
@@ -114,6 +117,11 @@ export function ParentApp() {
     );
     const summaries = await api<Summary[]>('/lessons');
     if (owner === auth.currentUser?.uid) setLessons(summaries);
+    const list =
+      await api<{ id: string; kid_id: string; lesson_id: string; revision: number }[]>(
+        '/assignments',
+      );
+    if (owner === auth.currentUser?.uid) setAssignments(list);
   }
   useEffect(() => {
     if (user) void refresh().catch(() => setError(t.error));
@@ -149,6 +157,8 @@ export function ParentApp() {
     if (auth.currentUser?.uid === user?.uid && user)
       setOpened({ ...value, lesson: value.lesson, owner_uid: user.uid });
   }
+  const assignedForKid = (lessonId: string) =>
+    assignments.some((a) => a.kid_id === selectedKid?.id && a.lesson_id === lessonId);
   function unlockParentArea() {
     setUnlocked(true);
     sessionStorage.setItem('lessonbooks-parent-unlocked', '1');
@@ -354,23 +364,37 @@ export function ParentApp() {
                 </div>
               )}
               <p>{t.kidPlayHelp}</p>
-              <div className="lesson-grid">
-                {kidLessons
-                  .filter((lesson) => lesson.status === 'approved')
-                  .map((lesson) => (
-                    <article className="lesson-tile" key={lesson.id}>
-                      <span className="status">{t.approved}</span>
-                      <h3>{lesson.summary}</h3>
-                      <button onClick={() => void perform(() => open(lesson))}>{t.open} →</button>
-                    </article>
-                  ))}
-              </div>
-              {!kidLessons.some((lesson) => lesson.status === 'approved') && (
-                <div className="empty-state">
-                  <span aria-hidden="true">✧</span>
-                  <p>{t.empty}</p>
-                </div>
-              )}
+              {(() => {
+                const approved = kidLessons.filter((lesson) => lesson.status === 'approved');
+                const assigned = approved.filter((lesson) =>
+                  assignments.some((a) => a.kid_id === selectedKid.id && a.lesson_id === lesson.id),
+                );
+                const rest = approved.filter((lesson) => !assigned.includes(lesson));
+                return (
+                  <>
+                    {assigned.length > 0 && <h3>{t.assignedLabel}</h3>}
+                    <div className="lesson-grid">
+                      {[...assigned, ...rest].map((lesson) => (
+                        <article className="lesson-tile" key={lesson.id}>
+                          <span className="status">
+                            {assigned.includes(lesson) ? t.assignedLabel : t.approved}
+                          </span>
+                          <h3>{lesson.summary}</h3>
+                          <button onClick={() => void perform(() => open(lesson))}>
+                            {t.open} →
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                    {!approved.length && (
+                      <div className="empty-state">
+                        <span aria-hidden="true">✧</span>
+                        <p>{t.empty}</p>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
               <button
                 disabled={busy}
                 onClick={() => {
@@ -565,6 +589,42 @@ export function ParentApp() {
                         </span>
                         <h3>{lesson.summary}</h3>
                         <button onClick={() => void perform(() => open(lesson))}>{t.open} →</button>
+                        {lesson.status === 'approved' &&
+                          (assignedForKid(lesson.id) ? (
+                            <button
+                              disabled={busy}
+                              onClick={() => {
+                                const record = assignments.find(
+                                  (a) => a.kid_id === selectedKid?.id && a.lesson_id === lesson.id,
+                                );
+                                if (!record) return;
+                                void perform(async () => {
+                                  await api(`/assignments/${record.id}`, { method: 'DELETE' });
+                                  await refresh();
+                                });
+                              }}
+                            >
+                              {t.unassign}
+                            </button>
+                          ) : (
+                            <button
+                              disabled={busy}
+                              onClick={() =>
+                                void perform(async () => {
+                                  await api('/assignments', {
+                                    method: 'POST',
+                                    body: JSON.stringify({
+                                      kid_id: selectedKid!.id,
+                                      lesson_id: lesson.id,
+                                    }),
+                                  });
+                                  await refresh();
+                                })
+                              }
+                            >
+                              {t.assign}
+                            </button>
+                          ))}
                       </article>
                     ))}
                   </div>

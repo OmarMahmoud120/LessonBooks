@@ -9,6 +9,7 @@ import {
   type Book,
   type Job,
   type LessonRecord,
+  type Assignment,
 } from './domain';
 import { assertLesson } from '@lessonbooks/contracts';
 import { noopPublisher, type TaskPublisher } from './transport';
@@ -199,6 +200,41 @@ export class FamilyService {
       return false;
     });
     if (!outcome) throw new DomainError('invalid_pin', 401);
+  }
+  // Assignments pin the approved revision at assign time; only approved lessons qualify.
+  async assign(uid: string, kidId: string, lessonId: string) {
+    return this.repo.atomic(async (tx) => {
+      await this.active(tx, uid, kidId);
+      const record = await tx.get<LessonRecord>(familyPath(uid, 'lessons', lessonId));
+      if (!record || record.kid_id !== kidId) throw new DomainError('lesson_not_found', 404);
+      if (record.status !== 'approved') throw new DomainError('lesson_not_approved', 409);
+      const existing = await tx.list<Assignment>(familyPath(uid, 'assignments'));
+      if (existing.some((a) => a.lesson_id === lessonId && a.kid_id === kidId))
+        throw new DomainError('assignment_exists', 409);
+      const assignment: Assignment = {
+        id: randomUUID(),
+        kid_id: kidId,
+        lesson_id: lessonId,
+        revision: record.revision,
+        assigned_by: uid,
+        assigned_at: new Date().toISOString(),
+      };
+      tx.put(familyPath(uid, 'assignments', assignment.id), assignment);
+      return assignment;
+    });
+  }
+  async unassign(uid: string, assignmentId: string) {
+    await this.repo.atomic(async (tx) => {
+      const assignment = await tx.get<Assignment>(familyPath(uid, 'assignments', assignmentId));
+      if (!assignment) throw new DomainError('assignment_not_found', 404);
+      await this.active(tx, uid, assignment.kid_id);
+      tx.delete(familyPath(uid, 'assignments', assignmentId));
+    });
+    return { deleted: true };
+  }
+  async listAssignments(uid: string) {
+    await this.repo.atomic(async (tx) => this.active(tx, uid));
+    return this.repo.list<Assignment>(familyPath(uid, 'assignments'));
   }
   async lesson(uid: string, id: string) {
     const record = await this.repo.get<LessonRecord>(familyPath(uid, 'lessons', id));

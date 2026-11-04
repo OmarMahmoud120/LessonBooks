@@ -221,6 +221,46 @@ describe('family boundaries and generation', () => {
       await expect(family.verifyPin('alice', '9999')).rejects.toThrow('invalid_pin');
     await expect(family.verifyPin('alice', '1234')).rejects.toThrow('pin_locked');
   });
+  it('assigns approved lessons to kids, pins revisions and sweeps on deletion', async () => {
+    const { family, kid, repo } = await setup();
+    await expect(family.assign('alice', kid.id, 'missing-lesson')).rejects.toThrow(
+      'lesson_not_found',
+    );
+    const { job_id } = await family.upload(
+      'alice',
+      kid.id,
+      Buffer.from('%PDF-1.7 synthetic'),
+      'assign-key-0001',
+    );
+    const pipeline = new Pipeline(
+      family,
+      new FixtureIngestor(),
+      new RoutedAI(new MockModelClient(), mockPolicy),
+    );
+    for (let stage = 0; stage < 6; stage++) await pipeline.run('alice', job_id);
+    const lessons = await repo.list<LessonRecord>(familyPath('alice', 'lessons'));
+    await expect(family.assign('alice', kid.id, lessons[0]!.id)).rejects.toThrow(
+      'lesson_not_approved',
+    );
+    await family.approve('alice', lessons[0]!.id, 1);
+    const assignment = await family.assign('alice', kid.id, lessons[0]!.id);
+    expect(assignment).toMatchObject({
+      kid_id: kid.id,
+      lesson_id: lessons[0]!.id,
+      revision: 1,
+      assigned_by: 'alice',
+    });
+    await expect(family.assign('alice', kid.id, lessons[0]!.id)).rejects.toThrow(
+      'assignment_exists',
+    );
+    expect(await family.listAssignments('alice')).toHaveLength(1);
+    await family.deleteKid('alice', kid.id);
+    expect(await family.listAssignments('alice')).toHaveLength(0);
+    const other = await family.addKid('alice', { ...kidInput, nickname: 'Owl' });
+    await expect(family.assign('alice', other.id, lessons[0]!.id)).rejects.toThrow(
+      'lesson_not_found',
+    );
+  });
   it('deletion wins over a worker that is still extracting content', async () => {
     const { family, kid, repo, assets } = await setup();
     const { job_id } = await family.upload(

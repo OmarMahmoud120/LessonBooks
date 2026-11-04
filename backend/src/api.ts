@@ -215,6 +215,29 @@ export async function createAPI(
       ({ storage_path: _path, ...record }) => record,
     );
   });
+  app.post<{ Body: { kid_id: string; lesson_id: string } }>(
+    '/v1/assignments',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            kid_id: { type: 'string', pattern: '^[a-zA-Z0-9_-]{1,128}$' },
+            lesson_id: { type: 'string', pattern: '^[a-zA-Z0-9_-]{1,128}$' },
+          },
+          required: ['kid_id', 'lesson_id'],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request) => families.assign(uid(request), request.body.kid_id, request.body.lesson_id),
+  );
+  app.get('/v1/assignments', async (request) => families.listAssignments(uid(request)));
+  app.delete<{ Params: { id: string } }>(
+    '/v1/assignments/:id',
+    { schema: { params: idSchema } },
+    async (request) => families.unassign(uid(request), request.params.id),
+  );
   app.get<{ Params: { id: string } }>(
     '/v1/lessons/:id',
     { schema: { params: idSchema } },
