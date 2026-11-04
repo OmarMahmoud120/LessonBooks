@@ -261,6 +261,82 @@ describe('family boundaries and generation', () => {
       'lesson_not_found',
     );
   });
+  it('records queued play events with ownership, revision and idempotency rules', async () => {
+    const { family, kid, repo } = await setup();
+    const { job_id } = await family.upload(
+      'alice',
+      kid.id,
+      Buffer.from('%PDF-1.7 synthetic'),
+      'events-key-0001',
+    );
+    const pipeline = new Pipeline(
+      family,
+      new FixtureIngestor(),
+      new RoutedAI(new MockModelClient(), mockPolicy),
+    );
+    for (let stage = 0; stage < 6; stage++) await pipeline.run('alice', job_id);
+    const lesson = (await repo.list<LessonRecord>(familyPath('alice', 'lessons')))[0]!;
+    const base = {
+      event_id: 'evt-started',
+      schema_version: '1.0.0' as const,
+      lesson_id: lesson.id,
+      lesson_revision: lesson.revision,
+      timestamp: '2026-11-05T10:00:00.000Z',
+    };
+    expect(await family.recordEvents('alice', [{ ...base, type: 'started' }])).toEqual({
+      accepted: 1,
+    });
+    expect(await family.recordEvents('alice', [{ ...base, type: 'started' }])).toEqual({
+      accepted: 0,
+    });
+    await expect(
+      family.recordEvents('alice', [
+        { ...base, event_id: 'evt-bad-rev', type: 'started', lesson_revision: lesson.revision + 1 },
+      ]),
+    ).rejects.toThrow('revision_mismatch');
+    await expect(
+      family.recordEvents('alice', [
+        { ...base, event_id: 'evt-answered', type: 'answered', score: 3, max_score: 4 },
+      ]),
+    ).rejects.toThrow('invalid_event');
+    await expect(
+      family.recordEvents('bob', [{ ...base, event_id: 'evt-forged', type: 'started' }]),
+    ).rejects.toThrow('lesson_not_found');
+    await expect(family.recordEvents('alice', [{ nope: true }])).rejects.toThrow('invalid_event');
+    await expect(
+      family.recordEvents(
+        'alice',
+        Array.from({ length: 51 }, (_, i) => ({ ...base, event_id: `x${i}` })),
+      ),
+    ).rejects.toThrow('invalid_event_batch');
+    await family.recordEvents('alice', [
+      {
+        ...base,
+        event_id: 'evt-answered',
+        type: 'answered',
+        activity_id: 'choose',
+        score: 3,
+        max_score: 4,
+      },
+    ]);
+    const stored = await repo.list<{ kid_id: string; event_id: string }>(
+      familyPath('alice', 'progress_events'),
+    );
+    expect(stored.every((e) => e.kid_id === kid.id)).toBe(true);
+    expect(stored.map((e) => e.event_id).sort()).toEqual(['evt-answered', 'evt-started']);
+    await family.recordEvents('alice', [
+      { ...base, event_id: 'evt-score', type: 'score', score: 3, max_score: 4 },
+    ]);
+    const report = await family.progress('alice', kid.id);
+    expect(report.lessons).toHaveLength(1);
+    expect(report.lessons[0]).toMatchObject({
+      lesson_id: lesson.id,
+      started: 1,
+      completed: 0,
+      score: 3,
+      max_score: 4,
+    });
+  });
   it('deletion wins over a worker that is still extracting content', async () => {
     const { family, kid, repo, assets } = await setup();
     const { job_id } = await family.upload(

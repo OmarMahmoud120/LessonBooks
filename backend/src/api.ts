@@ -233,6 +233,28 @@ export async function createAPI(
     async (request) => families.assign(uid(request), request.body.kid_id, request.body.lesson_id),
   );
   app.get('/v1/assignments', async (request) => families.listAssignments(uid(request)));
+  app.get<{ Params: { id: string } }>(
+    '/v1/kids/:id/progress',
+    { schema: { params: idSchema } },
+    async (request) => families.progress(uid(request), request.params.id),
+  );
+  app.post<{ Body: { events: unknown[] } }>(
+    '/v1/events',
+    {
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            events: { type: 'array', minItems: 1, maxItems: 50, items: { type: 'object' } },
+          },
+          required: ['events'],
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request) => families.recordEvents(uid(request), request.body.events),
+  );
   app.delete<{ Params: { id: string } }>(
     '/v1/assignments/:id',
     { schema: { params: idSchema } },

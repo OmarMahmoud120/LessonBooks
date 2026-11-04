@@ -79,6 +79,20 @@ export type Assignment = {
   assigned_by: string;
   assigned_at: string;
 };
+export type LessonEventType = 'started' | 'answered' | 'hint_used' | 'completed' | 'score';
+export type ProgressEvent = {
+  event_id: string;
+  kid_id: string;
+  lesson_id: string;
+  revision: number;
+  activity_id?: string;
+  type: LessonEventType;
+  score?: number;
+  max_score?: number;
+  duration_ms?: number;
+  client_at: string;
+  received_at: string;
+};
 export type LessonRecord = {
   id: string;
   kid_id: string;

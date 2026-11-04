@@ -10,8 +10,9 @@ import {
   type Job,
   type LessonRecord,
   type Assignment,
+  type ProgressEvent,
 } from './domain';
-import { assertLesson } from '@lessonbooks/contracts';
+import { assertLesson, assertEvent, type LessonEvent } from '@lessonbooks/contracts';
 import { noopPublisher, type TaskPublisher } from './transport';
 
 export class FamilyService {
@@ -235,6 +236,85 @@ export class FamilyService {
   async listAssignments(uid: string) {
     await this.repo.atomic(async (tx) => this.active(tx, uid));
     return this.repo.list<Assignment>(familyPath(uid, 'assignments'));
+  }
+  // Queued play events: validated against the generated event contract, ownership derived
+  // from the lesson record (never the request), deduplicated by event_id.
+  async recordEvents(uid: string, input: unknown[]) {
+    if (!Array.isArray(input) || input.length < 1 || input.length > 50)
+      throw new DomainError('invalid_event_batch');
+    const events: LessonEvent[] = [];
+    for (const raw of input) {
+      try {
+        assertEvent(raw);
+      } catch {
+        throw new DomainError('invalid_event');
+      }
+      events.push(raw as LessonEvent);
+    }
+    return this.repo.atomic(async (tx) => {
+      let accepted = 0;
+      for (const event of events) {
+        const record = await tx.get<LessonRecord>(familyPath(uid, 'lessons', event.lesson_id));
+        if (!record) throw new DomainError('lesson_not_found', 404);
+        if (record.revision !== event.lesson_revision)
+          throw new DomainError('revision_mismatch', 409);
+        await this.active(tx, uid, record.kid_id);
+        const path = familyPath(uid, 'progress_events', event.event_id);
+        if (await tx.get(path)) continue;
+        const stored: ProgressEvent = {
+          event_id: event.event_id,
+          kid_id: record.kid_id,
+          lesson_id: event.lesson_id,
+          revision: event.lesson_revision,
+          type: event.type,
+          client_at: event.timestamp,
+          received_at: new Date().toISOString(),
+        };
+        if (event.activity_id !== undefined) stored.activity_id = event.activity_id;
+        if (event.score !== undefined) stored.score = event.score;
+        if (event.max_score !== undefined) stored.max_score = event.max_score;
+        if (event.duration_ms !== undefined) stored.duration_ms = event.duration_ms;
+        tx.put(path, stored);
+        accepted++;
+      }
+      return { accepted };
+    });
+  }
+  // Parent dashboard aggregation: per-lesson play counts, scores and last-played time.
+  async progress(uid: string, kidId: string) {
+    await this.repo.atomic((tx) => this.active(tx, uid, kidId));
+    const events = await this.repo.list<ProgressEvent>(familyPath(uid, 'progress_events'));
+    const byLesson = new Map<
+      string,
+      {
+        lesson_id: string;
+        started: number;
+        completed: number;
+        score: number;
+        max_score: number;
+        last_client_at: string;
+      }
+    >();
+    for (const event of events) {
+      if (event.kid_id !== kidId) continue;
+      const entry = byLesson.get(event.lesson_id) ?? {
+        lesson_id: event.lesson_id,
+        started: 0,
+        completed: 0,
+        score: 0,
+        max_score: 0,
+        last_client_at: '',
+      };
+      if (event.type === 'started') entry.started++;
+      if (event.type === 'completed') entry.completed++;
+      if (event.type === 'score') {
+        entry.score += event.score ?? 0;
+        entry.max_score += event.max_score ?? 0;
+      }
+      if (event.client_at > entry.last_client_at) entry.last_client_at = event.client_at;
+      byLesson.set(event.lesson_id, entry);
+    }
+    return { kid_id: kidId, lessons: [...byLesson.values()] };
   }
   async lesson(uid: string, id: string) {
     const record = await this.repo.get<LessonRecord>(familyPath(uid, 'lessons', id));
