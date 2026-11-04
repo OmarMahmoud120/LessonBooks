@@ -1,0 +1,30 @@
+<journey name="Android parent-to-lesson preview">
+  <description>Use only the test emulator, local Firebase emulators, mocked AI, a synthetic account and the repository-authored counting PDF.</description>
+  <actions>
+    <action>Launch LessonBooks on the selected test emulator.</action>
+    <action>Verify that the sign-in form and Create account button are visible.</action>
+    <action>Enter the synthetic email into the Email address field.</action>
+    <action>Enter the synthetic password into the Password field.</action>
+    <action>Tap Create account.</action>
+    <action>Verify that the parental consent screen is visible.</action>
+    <action>Tap Save choices.</action>
+    <action>Tap Save choices in the consent confirmation dialog.</action>
+    <action>Verify that the child profile form is visible.</action>
+    <action>Enter SampleFox into the Nickname field.</action>
+    <action>Tap Create profile for Year 1.</action>
+    <action>Verify that Choose a PDF is visible.</action>
+    <action>Tap Choose a PDF.</action>
+    <action>Select lessonbooks-counting.pdf from Downloads.</action>
+    <action>Verify that the generated lessons appear in the parent library.</action>
+    <action>Tap Review lesson for the first lesson.</action>
+    <action>Verify that the lesson title and first activity are visible in the native WebView.</action>
+    <action>Select Three and tap Check answer.</action>
+    <action>Verify that correct-answer feedback is visible.</action>
+    <action>Tap Approve this lesson.</action>
+    <action>Verify that the approval control shows Approved.</action>
+    <action>Tap Back to your library.</action>
+    <action>Tap Delete child and their books.</action>
+    <action>Confirm deletion in the dialog.</action>
+    <action>Verify that the child profile form is visible and the previous lessons are absent.</action>
+  </actions>
+</journey>

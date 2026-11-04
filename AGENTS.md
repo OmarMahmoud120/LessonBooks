@@ -31,6 +31,7 @@ Current scope: Phase 0 foundations and Phase 1 parent preview. See doc/milestone
 
 - Install: npm ci (requires permission; npm install for the initial lockfile).
 - Develop: npm run dev; npm run dev:mobile; npm run emulators.
+- Android device work: read .agents/skills/android-cli/SKILL.md first; see mobile/AGENTS.md.
 - Format/lint: npm run format; npm run lint.
 - Types/tests: npm run typecheck; npm test; npm run check:fast; npm run check.
 - Contracts: npm run contracts:generate; npm run contracts:check.
@@ -79,3 +80,14 @@ uses `npm run export:ios --workspace @lessonbooks/mobile` (offline Expo, telemet
 Client validators are generated standalone code; dynamic schema compilation belongs only in
 @lessonbooks/contracts/server. Preserve the player CSP without unsafe-eval. See
 doc/milestones.md for native-device, cloud transport, OCR/image and live-provider gaps.
+
+## Native Android testing
+
+Use the Android CLI skill for emulator management, APK build/install/launch, layout
+inspection and screenshots. Prefer an isolated emulator; select its serial explicitly
+when a physical phone is also connected. Never run tests against family data.
+Inspect `android layout` before tapping; confirm fields are focused before typing.
+Visually inspect each captured screenshot before further actions. Record native
+journey results separately from browser tests and JavaScript bundle exports.
+Generate Expo native files from mobile/ only; keep native projects under mobile/android.
+Ask before downloading native dependencies, SDK images or adding integrations.

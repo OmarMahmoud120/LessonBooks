@@ -51,3 +51,13 @@ Phase 2: child switching, PIN/gate, assignments, durable offline cache, queued e
 Phase 3: additional launch curricula/languages and remaining five activities.
 Phase 4: parent editing/regeneration UI and expanded moderation/evaluation quality.
 Phase 5: broader markets, game shells and subscriptions.
+
+## Android native attempt — 2026-11-04
+
+Android CLI 1.1.16717390 built and installed the debug APK on Pixel_8_35
+(emulator-5554, arm64-v8a). JDK 21 resolved the initial Gradle/JDK 25 mismatch.
+Native verification is now attempted, but failed before sign-in: an initial Metro
+connection error was followed by a blank screen after reload. Login, PDF upload,
+WebView lessons, approval and deletion remain unverified on Android. See
+android-native-test.md and evidence/android/. The connected physical phone was
+not used. Do not mark the native-device milestone complete.

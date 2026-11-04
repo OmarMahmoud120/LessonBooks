@@ -17,3 +17,14 @@ Native builds use `npm run ios --workspace @lessonbooks/mobile` or the Android
 counterpart; these may install native dependencies and require separate approval.
 No kid mode, assignments, PIN gate, offline download manager or queued progress yet.
 Do not put secrets in mobile configuration. See ../doc/milestones.md.
+
+## Native Android test
+
+The Android CLI skill is registered in root/mobile AGENTS.md. Generate Android
+from this directory using `npx expo prebuild --platform android --no-install`;
+the generated project is ignored. Use JDK 21 and the installed Android SDK.
+Build from root with `android build 'gradle://mobile/android?app:assembleDebug'`.
+Start local Firebase/API services and Metro before launch, reverse port 8081 for
+the selected emulator, then use `android run` with the generated APK and explicit
+device serial. Downloads require approval. See ../doc/android-native-test.md for
+the observed startup failure; installation/build success is not a journey pass.
