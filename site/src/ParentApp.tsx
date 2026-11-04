@@ -207,10 +207,10 @@ export function ParentApp() {
   const assignedForKid = (lessonId: string) =>
     assignments.some((a) => a.kid_id === selectedKid?.id && a.lesson_id === lessonId);
   function flush() {
-    void perform(async () => {
-      await flushQueue(async (batch) =>
-        api('/events', { method: 'POST', body: JSON.stringify({ events: batch }) }),
-      );
+    void flushQueue(async (batch) =>
+      api('/events', { method: 'POST', body: JSON.stringify({ events: batch }) }),
+    ).catch(() => {
+      // Delivery is best-effort while offline; the next load, interval or online event retries.
     });
   }
   function recordEvent(event: Parameters<typeof enqueueEvent>[0]) {
