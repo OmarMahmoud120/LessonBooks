@@ -1,4 +1,4 @@
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID, createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { Assets, Repository, Transaction } from './persistence';
 import {
   DomainError,
@@ -158,6 +158,47 @@ export class FamilyService {
       if (!retained || retained.source_path !== source) await this.assets.deletePrefix(source);
       throw error;
     }
+  }
+  // The PIN guards the parent tools only; child play stays open and no child identity exists.
+  async setPin(uid: string, pin: string) {
+    if (!/^[0-9]{4,8}$/.test(pin)) throw new DomainError('invalid_pin');
+    const salt = randomBytes(16).toString('hex');
+    const hash = scryptSync(pin, salt, 64).toString('hex');
+    await this.repo.atomic(async (tx) => {
+      const parent = await tx.get<Parent>(familyPath(uid));
+      if (!parent || parent.state !== 'active') throw new DomainError('family_unavailable', 409);
+      tx.put(familyPath(uid), {
+        ...parent,
+        pin_hash: hash,
+        pin_salt: salt,
+        pin_updated_at: new Date().toISOString(),
+        pin_failed_count: 0,
+        pin_locked_until: 0,
+      });
+    });
+  }
+  async verifyPin(uid: string, pin: string, now = Date.now) {
+    if (!/^[0-9]{4,8}$/.test(pin)) throw new DomainError('invalid_pin', 401);
+    const outcome = await this.repo.atomic(async (tx) => {
+      const parent = await tx.get<Parent>(familyPath(uid));
+      if (!parent?.pin_hash || !parent.pin_salt) throw new DomainError('pin_not_set', 404);
+      if ((parent.pin_locked_until ?? 0) > now()) throw new DomainError('pin_locked', 429);
+      const attempt = scryptSync(pin, parent.pin_salt, 64);
+      const stored = Buffer.from(parent.pin_hash, 'hex');
+      const matches = attempt.length === stored.length && timingSafeEqual(attempt, stored);
+      if (matches) {
+        tx.put(familyPath(uid), { ...parent, pin_failed_count: 0, pin_locked_until: 0 });
+        return true;
+      }
+      const failedCount = (parent.pin_failed_count ?? 0) + 1;
+      tx.put(familyPath(uid), {
+        ...parent,
+        pin_failed_count: failedCount,
+        pin_locked_until: failedCount >= 5 ? now() + 300000 : 0,
+      });
+      return false;
+    });
+    if (!outcome) throw new DomainError('invalid_pin', 401);
   }
   async lesson(uid: string, id: string) {
     const record = await this.repo.get<LessonRecord>(familyPath(uid, 'lessons', id));

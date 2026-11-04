@@ -40,6 +40,13 @@ export function ParentApp() {
   const [kids, setKids] = useState<Kid[]>([]);
   const [selectedKidId, setSelectedKidId] = useState<string | null>(null);
   const [addingKid, setAddingKid] = useState(false);
+  const [pinSet, setPinSet] = useState(false);
+  const [unlocked, setUnlocked] = useState(
+    () => sessionStorage.getItem('lessonbooks-parent-unlocked') === '1',
+  );
+  const [pinInput, setPinInput] = useState('');
+  const [pinFormOpen, setPinFormOpen] = useState(false);
+  const [kidView, setKidView] = useState(false);
   const [consented, setConsented] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [rights, setRights] = useState(false);
@@ -68,6 +75,11 @@ export function ParentApp() {
         setOpened(null);
         setJob(null);
         setConsented(false);
+        setUnlocked(false);
+        sessionStorage.removeItem('lessonbooks-parent-unlocked');
+        setKidView(false);
+        setPinFormOpen(false);
+        setPinInput('');
       }),
     [],
   );
@@ -87,9 +99,14 @@ export function ParentApp() {
   }
   async function refresh() {
     const owner = auth.currentUser?.uid;
-    const family = await api<{ kids: Kid[]; consents: { type: string }[] }>('/family');
+    const family = await api<{
+      kids: Kid[];
+      consents: { type: string }[];
+      pin_set: boolean;
+    }>('/family');
     if (!owner || owner !== auth.currentUser?.uid) return;
     setKids(family.kids);
+    setPinSet(family.pin_set);
     if (!family.kids.some((kid) => kid.id === selectedKidId))
       setSelectedKidId(family.kids[0]?.id ?? null);
     setConsented(
@@ -132,27 +149,52 @@ export function ParentApp() {
     if (auth.currentUser?.uid === user?.uid && user)
       setOpened({ ...value, lesson: value.lesson, owner_uid: user.uid });
   }
+  function unlockParentArea() {
+    setUnlocked(true);
+    sessionStorage.setItem('lessonbooks-parent-unlocked', '1');
+  }
+  async function submitPin() {
+    await perform(async () => {
+      await api('/parent/pin/verify', {
+        method: 'POST',
+        body: JSON.stringify({ pin: pinInput }),
+      });
+      setPinInput('');
+      unlockParentArea();
+    });
+  }
+  async function savePin() {
+    await perform(async () => {
+      await api('/parent/pin', { method: 'POST', body: JSON.stringify({ pin: pinInput }) });
+      setPinInput('');
+      setPinFormOpen(false);
+      setPinSet(true);
+      unlockParentArea();
+    });
+  }
   if (opened && user && opened.owner_uid === user.uid)
     return (
       <div>
         <nav className="preview-nav">
           <button onClick={() => setOpened(null)}>← {t.back}</button>
-          <button
-            className="primary"
-            disabled={busy || opened.status === 'approved'}
-            onClick={() =>
-              void perform(async () => {
-                await api(`/lessons/${opened.lesson.id}/approve`, {
-                  method: 'POST',
-                  body: JSON.stringify({ revision: opened.revision }),
-                });
-                setOpened({ ...opened, status: 'approved' });
-                await refresh();
-              })
-            }
-          >
-            {opened.status === 'approved' ? t.approved : t.approve}
-          </button>
+          {!kidView && (
+            <button
+              className="primary"
+              disabled={busy || opened.status === 'approved'}
+              onClick={() =>
+                void perform(async () => {
+                  await api(`/lessons/${opened.lesson.id}/approve`, {
+                    method: 'POST',
+                    body: JSON.stringify({ revision: opened.revision }),
+                  });
+                  setOpened({ ...opened, status: 'approved' });
+                  await refresh();
+                })
+              }
+            >
+              {opened.status === 'approved' ? t.approved : t.approve}
+            </button>
+          )}
         </nav>
         {error && <p role="alert">{error}</p>}
         <Player
@@ -294,6 +336,86 @@ export function ParentApp() {
               >
                 {t.saveConsent}
               </button>
+            </section>
+          ) : kidView && selectedKid ? (
+            <section className="parent-card kid-play">
+              <h2>{selectedKid.nickname}</h2>
+              {kids.length > 1 && (
+                <div className="kid-switcher" role="group" aria-label={t.children}>
+                  {kids.map((kid) => (
+                    <button
+                      key={kid.id}
+                      aria-pressed={kid.id === selectedKid.id}
+                      onClick={() => setSelectedKidId(kid.id)}
+                    >
+                      {kid.nickname}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <p>{t.kidPlayHelp}</p>
+              <div className="lesson-grid">
+                {kidLessons
+                  .filter((lesson) => lesson.status === 'approved')
+                  .map((lesson) => (
+                    <article className="lesson-tile" key={lesson.id}>
+                      <span className="status">{t.approved}</span>
+                      <h3>{lesson.summary}</h3>
+                      <button onClick={() => void perform(() => open(lesson))}>{t.open} →</button>
+                    </article>
+                  ))}
+              </div>
+              {!kidLessons.some((lesson) => lesson.status === 'approved') && (
+                <div className="empty-state">
+                  <span aria-hidden="true">✧</span>
+                  <p>{t.empty}</p>
+                </div>
+              )}
+              <button
+                disabled={busy}
+                onClick={() => {
+                  setKidView(false);
+                  setOpened(null);
+                }}
+              >
+                {t.kidPlayExit}
+              </button>
+            </section>
+          ) : pinSet && !unlocked ? (
+            <section className="parent-card pin-gate">
+              <h2>{t.pinGateTitle}</h2>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void submitPin();
+                }}
+              >
+                <label>
+                  {t.pinGatePrompt}
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    required
+                    pattern="[0-9]{4,8}"
+                    value={pinInput}
+                    onChange={(e) => setPinInput(e.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <button className="primary" disabled={busy}>
+                  {t.pinEnter}
+                </button>
+              </form>
+              {selectedKid && (
+                <button
+                  onClick={() => {
+                    setKidView(true);
+                    setPinInput('');
+                  }}
+                >
+                  {t.kidPlay}
+                </button>
+              )}
             </section>
           ) : !kids.length || addingKid ? (
             <form
@@ -450,6 +572,35 @@ export function ParentApp() {
               </section>
               <footer className="data-controls">
                 <p>{t.privacy}</p>
+                {pinSet && <button onClick={() => setKidView(true)}>{t.kidPlay}</button>}
+                {pinFormOpen ? (
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void savePin();
+                    }}
+                  >
+                    <label>
+                      {pinSet ? t.pinChange : t.pinChoose}
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        required
+                        pattern="[0-9]{4,8}"
+                        value={pinInput}
+                        onChange={(e) => setPinInput(e.target.value)}
+                        autoComplete="new-password"
+                      />
+                    </label>
+                    <button className="primary" disabled={busy}>
+                      {t.pinSave}
+                    </button>
+                  </form>
+                ) : (
+                  <button onClick={() => setPinFormOpen(true)}>
+                    {pinSet ? t.pinChangeAction : t.pinSetAction}
+                  </button>
+                )}
                 <button
                   disabled={busy}
                   onClick={() => {

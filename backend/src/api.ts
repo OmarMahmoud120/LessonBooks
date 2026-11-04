@@ -77,7 +77,10 @@ export async function createAPI(
   };
   app.get('/health', async () => ({ status: 'ok', mode: 'parent-preview' }));
   app.get('/v1/catalog', async () => catalog);
-  app.get('/v1/family', async (request) => families.overview(uid(request)));
+  app.get('/v1/family', async (request) => {
+    const overview = await families.overview(uid(request));
+    return { ...overview, pin_set: Boolean((overview.parent as { pin_hash?: string }).pin_hash) };
+  });
   app.post<{ Body: { type: 'privacy' | 'content_rights'; version: '2026-11-03'; granted: true } }>(
     '/v1/consents',
     {
@@ -135,6 +138,34 @@ export async function createAPI(
     await families.deleteAccount(uid(request));
     return { deleted: true };
   });
+  const pinSchema = {
+    type: 'object',
+    properties: { pin: { type: 'string', pattern: '^[0-9]{4,8}$' } },
+    required: ['pin'],
+    additionalProperties: false,
+  };
+  app.post<{ Body: { pin: string } }>(
+    '/v1/parent/pin',
+    {
+      config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
+      schema: { body: pinSchema },
+    },
+    async (request) => {
+      const identity = identities.get(request)!;
+      if (Date.now() / 1000 - identity.auth_time > 300)
+        throw new DomainError('recent_auth_required', 401);
+      await families.setPin(uid(request), request.body.pin);
+      return { pin_set: true };
+    },
+  );
+  app.post<{ Body: { pin: string } }>(
+    '/v1/parent/pin/verify',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } }, schema: { body: pinSchema } },
+    async (request) => {
+      await families.verifyPin(uid(request), request.body.pin);
+      return { ok: true };
+    },
+  );
   app.post<{ Querystring: { kid_id: string } }>(
     '/v1/books',
     {

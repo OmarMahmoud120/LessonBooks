@@ -16,6 +16,11 @@ export type Parent = {
   preferred_language: string;
   country: string;
   created_at: string;
+  pin_hash?: string;
+  pin_salt?: string;
+  pin_updated_at?: string;
+  pin_failed_count?: number;
+  pin_locked_until?: number;
 };
 export type Consent = {
   id: string;

@@ -4,7 +4,7 @@ import { MemoryRepository, MemoryAssets } from '../src/persistence';
 import { Pipeline } from '../src/pipeline';
 import { FixtureIngestor } from '../src/ingest';
 import { MockModelClient, RoutedAI, mockPolicy } from '../src/ai';
-import { familyPath, type Job, type Kid, type LessonRecord } from '../src/domain';
+import { familyPath, type Job, type Kid, type LessonRecord, type Parent } from '../src/domain';
 import { createAPI } from '../src/api';
 
 export const kidInput: Omit<Kid, 'id' | 'state'> = {
@@ -206,6 +206,20 @@ describe('family boundaries and generation', () => {
     expect(await family.repo.get(familyPath('alice', 'kids', second.id))).toMatchObject({
       state: 'active',
     });
+  });
+  it('sets, verifies and rate-limits the parent PIN without leaking material', async () => {
+    const { family, repo } = await setup();
+    await expect(family.verifyPin('alice', '1234')).rejects.toThrow('pin_not_set');
+    await family.setPin('alice', '1234');
+    await expect(family.setPin('alice', 'abc')).rejects.toThrow('invalid_pin');
+    const parent = await repo.get<Parent>(familyPath('alice'));
+    expect(parent?.pin_hash).toMatch(/^[0-9a-f]{128}$/);
+    expect(parent?.pin_hash).not.toContain('1234');
+    await expect(family.verifyPin('alice', '9999')).rejects.toThrow('invalid_pin');
+    await expect(family.verifyPin('alice', '1234')).resolves.toBeUndefined();
+    for (let attempt = 0; attempt < 5; attempt++)
+      await expect(family.verifyPin('alice', '9999')).rejects.toThrow('invalid_pin');
+    await expect(family.verifyPin('alice', '1234')).rejects.toThrow('pin_locked');
   });
   it('deletion wins over a worker that is still extracting content', async () => {
     const { family, kid, repo, assets } = await setup();
