@@ -23,6 +23,8 @@ vertical slice is implemented; the remaining criteria below prevent a full phase
 - [x] Firestore/Storage rules deny direct private access for anonymous and signed-in clients.
 - [x] iOS JavaScript bundle export verified with Metro; this is not native-device execution.
 - [x] PDF text extraction runs in a timed worker with a bounded JavaScript heap.
+- [x] Docker packaging: multi-stage api/worker/emulator targets, hardened compose stack with
+      scanner-definition updater; smoke tests pass (doc/docker.md, ADR 0009).
 
 ## Remaining Phase 0 evidence
 
