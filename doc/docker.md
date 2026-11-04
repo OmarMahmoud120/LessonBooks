@@ -53,8 +53,9 @@ docker build -f backend/Dockerfile --target worker -t lessonbooks-worker:local .
 
 API contains built JavaScript, versioned prompts, the mock lesson fixture and
 production npm dependencies, without a TS loader, source tree, emulator CLI or OCR
-tools. Worker adds pdftoppm/pdfimages, Tesseract with
-English data, and clamscan/freshclam. Both run non-root. Compose uses read-only roots,
+tools. Worker adds pdftoppm/pdfimages, Tesseract with the pinned tessdata_best
+Arabic and English LSTM models (sha256-verified download at build, see ADR 0010),
+and clamscan/freshclam. Both run non-root. Compose uses read-only roots,
 bounded temporary storage and read-only worker scanner definitions. The worker has only the internal network and cannot reach the internet. The updater
 has a separate outbound network and no family-data access. API/emulators also use a
 local bridge for host port publishing; that bridge permits outbound traffic.

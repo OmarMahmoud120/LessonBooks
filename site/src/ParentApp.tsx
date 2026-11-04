@@ -37,6 +37,7 @@ export function ParentApp() {
   const [rights, setRights] = useState(false);
   const [nickname, setNickname] = useState('');
   const [grade, setGrade] = useState('year-1');
+  const [kidLanguage, setKidLanguage] = useState<'en-GB' | 'ar'>('en-GB');
   const [file, setFile] = useState<File | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [lessons, setLessons] = useState<Summary[]>([]);
@@ -294,7 +295,7 @@ export function ParentApp() {
                       grade_id: grade,
                       age_band: grade === 'year-1' ? '5-7' : '6-8',
                       country: 'GB-ENG',
-                      language: 'en-GB',
+                      language: kidLanguage,
                       curriculum_id: 'england-national-2014',
                       reading_level: 'emerging',
                     }),
@@ -322,6 +323,16 @@ export function ParentApp() {
                 <select value={grade} onChange={(e) => setGrade(e.target.value)}>
                   <option value="year-1">{t.year1}</option>
                   <option value="year-2">{t.year2}</option>
+                </select>
+              </label>
+              <label>
+                {t.childLanguage}
+                <select
+                  value={kidLanguage}
+                  onChange={(e) => setKidLanguage(e.target.value as 'en-GB' | 'ar')}
+                >
+                  <option value="en-GB">{t.languageEn}</option>
+                  <option value="ar">{t.languageAr}</option>
                 </select>
               </label>
               <button className="primary" disabled={busy}>

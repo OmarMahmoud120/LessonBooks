@@ -93,11 +93,13 @@ export class FamilyService {
     const existing = await this.repo.get<Book>(familyPath(uid, 'books', id));
     if (existing && (existing.sha256 !== digest || existing.kid_id !== kidId))
       throw new DomainError('idempotency_conflict', 409);
+    const kid = await this.repo.get<Kid>(familyPath(uid, 'kids', kidId));
+    if (!kid || kid.state !== 'active') throw new DomainError('kid_not_found', 404);
     const book: Book = {
       id,
       kid_id: kidId,
       subject: 'mathematics',
-      language: 'en-GB',
+      language: kid.language,
       source_path: source,
       sha256: digest,
       status: 'uploaded',

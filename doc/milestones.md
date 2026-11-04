@@ -25,6 +25,8 @@ vertical slice is implemented; the remaining criteria below prevent a full phase
 - [x] PDF text extraction runs in a timed worker with a bounded JavaScript heap.
 - [x] Docker packaging: multi-stage api/worker/emulator targets, hardened compose stack with
       scanner-definition updater; smoke tests pass (doc/docker.md, ADR 0009).
+- [x] Arabic language plumbing end to end with mocked AI: explicit `ar` kid language, Arabic
+      OCR via pinned best models, Arabic lesson fixture generation and RTL metadata (ADR 0010).
 
 ## Remaining Phase 0 evidence
 
@@ -36,7 +38,10 @@ vertical slice is implemented; the remaining criteria below prevent a full phase
 
 - [x] Native Android emulator journey: signup, consent, profile, owned PDF, WebView answer, approval and child deletion.
 - [x] Upload-copy lifecycle cleanup, failure/race tests and Android seeded-residue startup recovery; see upload-cache-cleanup.md.
-- [ ] OCR binaries/scanner verified, source image extraction, stronger source-language detection.
+- [x] OCR binaries/scanner verified, source image extraction, stronger source-language detection:
+      Docker tools smoke proves clamscan, rasterization and pinned tessdata_best English/Arabic
+      OCR in the non-root worker; OCR-rasterized pages persist as family-scoped assets; per-page
+      script detection plus explicit kid language replace the old Arabic rejection (ADR 0010).
 - [ ] Cloud Tasks/OIDC/outbox transport and deployable Cloud Run packaging (local polling exists).
 - [ ] Approved real model/provider configuration, conservative live spend enforcement and live QA.
 - [x] Two-book mocked prompt evaluation across both grades; real-model before/after reports remain pending.

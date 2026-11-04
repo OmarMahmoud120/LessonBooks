@@ -42,6 +42,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates poppler-utils tesseract-ocr tesseract-ocr-eng clamav clamav-freshclam \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/lib/clamav && chown node:node /var/lib/clamav
+# Overwrite the fast distribution models with the most accurate LSTM models, pinned by sha256.
+COPY backend/infra/fetch-tessdata.mjs ./fetch-tessdata.mjs
+RUN node fetch-tessdata.mjs /usr/share/tesseract-ocr/5/tessdata && rm fetch-tessdata.mjs
 COPY backend/infra/freshclam.conf /app/freshclam.conf
 ENV SERVICE_ROLE=worker OMP_THREAD_LIMIT=1
 USER node

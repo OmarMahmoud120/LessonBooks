@@ -101,7 +101,7 @@ export async function createAPI(
     avatar: { enum: ['fox', 'owl', 'cat'] },
     age_band: { enum: ['5-7', '6-8'] },
     country: { const: 'GB-ENG' },
-    language: { const: 'en-GB' },
+    language: { enum: ['en-GB', 'ar'] },
     curriculum_id: { const: 'england-national-2014' },
     grade_id: { enum: ['year-1', 'year-2'] },
     reading_level: { enum: ['emerging', 'developing'] },

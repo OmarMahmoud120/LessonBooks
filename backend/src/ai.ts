@@ -178,7 +178,7 @@ export const mockPolicy: RoutingPolicy = {
       model: 'mock/teaching',
       providers: ['mock'],
       stages: ['structure', 'plan', 'generate', 'validate'],
-      languages: ['en-GB'],
+      languages: ['en-GB', 'ar'],
       maxTokens: 4000,
       maxCostUSD: 0,
     },
@@ -206,17 +206,21 @@ export class MockModelClient implements ModelClient {
         ],
       };
     else if (request.purpose === 'generate') {
+      const child = data.child as { grade_id: string; language: string };
       const lesson: unknown = JSON.parse(
         await readFile(
-          resolve(import.meta.dirname, '../../doc/fixtures/lessons/math.json'),
+          resolve(
+            import.meta.dirname,
+            `../../doc/fixtures/lessons/${child.language === 'ar' ? 'arabic' : 'math'}.json`,
+          ),
           'utf8',
         ),
       );
       assertLesson(lesson);
       const outline = data.outline as { id: string; title: string };
       lesson.id = outline.id;
-      lesson.metadata.title = { 'en-GB': outline.title };
-      lesson.metadata.grade_id = (data.child as { grade_id: string }).grade_id;
+      lesson.metadata.title = { [child.language]: outline.title };
+      lesson.metadata.grade_id = child.grade_id;
       output = lesson;
     } else if (request.purpose === 'validate')
       output = {

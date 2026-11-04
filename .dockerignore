@@ -18,6 +18,7 @@
 !backend/infra/*health*.mjs
 !backend/infra/start-emulators.sh
 !backend/infra/freshclam.conf
+!backend/infra/fetch-tessdata.mjs
 !doc/
 !doc/contracts/
 !doc/contracts/**

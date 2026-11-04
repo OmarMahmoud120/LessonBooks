@@ -4,7 +4,7 @@ export type Kid = {
   avatar: 'fox' | 'owl' | 'cat';
   age_band: '5-7' | '6-8';
   country: 'GB-ENG';
-  language: 'en-GB';
+  language: 'en-GB' | 'ar';
   curriculum_id: 'england-national-2014';
   grade_id: 'year-1' | 'year-2';
   reading_level: 'emerging' | 'developing';

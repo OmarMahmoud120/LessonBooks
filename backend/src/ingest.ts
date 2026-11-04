@@ -7,12 +7,15 @@ import { join } from 'node:path';
 import { DomainError } from './domain';
 
 export type ExtractedBook = {
-  pages: { page: number; text: string }[];
+  pages: { page: number; text: string; language?: 'en' | 'ar' }[];
   language: string;
   images: { page: number; asset_id: string }[];
 };
+// Persisted page images inherit family storage scoping and deletion.
+export type ImageSink = (page: number, bytes: Uint8Array) => Promise<string>;
+export const SUPPORTED_LANGUAGES = ['en-GB', 'ar'] as const;
 export interface Ingestor {
-  extract(bytes: Uint8Array): Promise<ExtractedBook>;
+  extract(bytes: Uint8Array, language?: string, sink?: ImageSink): Promise<ExtractedBook>;
 }
 export function runProcess(command: string, args: string[], timeout = 60000): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -40,12 +43,32 @@ export function runProcess(command: string, args: string[], timeout = 60000): Pr
     });
   });
 }
+// Tesseract traineddata selection follows the explicit kid language, never content guessing.
+export function ocrLanguages(language: string): string {
+  return language.split('-')[0] === 'ar' ? 'ara+eng' : 'eng';
+}
+// Arabic connected-script accuracy needs a higher rasterization scale than Latin pages.
+export function ocrScale(language: string): number {
+  return language.split('-')[0] === 'ar' ? 2400 : 1800;
+}
+// NFKC folds Arabic presentation forms into canonical letters; tatweel is pure stretch.
+export function normalizeText(text: string): string {
+  return text.normalize('NFKC').replace(/\u0640/g, '');
+}
+export function detectPageLanguage(text: string, fallback: string): 'en' | 'ar' {
+  const letters = text.match(/\p{L}/gu) ?? [];
+  if (!letters.length) return fallback.split('-')[0] === 'ar' ? 'ar' : 'en';
+  const arabic = text.match(/\p{Script=Arabic}/gu) ?? [];
+  return arabic.length > letters.length * 0.4 ? 'ar' : 'en';
+}
 export class PDFIngestor implements Ingestor {
   constructor(
     private requireScan = false,
     private run = runProcess,
   ) {}
-  async extract(bytes: Uint8Array): Promise<ExtractedBook> {
+  async extract(bytes: Uint8Array, language = 'en-GB', sink?: ImageSink): Promise<ExtractedBook> {
+    if (!(SUPPORTED_LANGUAGES as readonly string[]).includes(language))
+      throw new DomainError('unsupported_source_language');
     if (bytes.length > 15 * 1024 * 1024) throw new DomainError('upload_too_large');
     const dir = await mkdtemp(join(tmpdir(), 'lessonbooks-ingest-'));
     const path = join(dir, 'book.pdf');
@@ -55,10 +78,14 @@ export class PDFIngestor implements Ingestor {
       const extracted = await parsePDF(bytes);
       {
         const pages: ExtractedBook['pages'] = [];
+        const images: ExtractedBook['images'] = [];
         let total = 0;
         for (let pageNumber = 1; pageNumber <= extracted.length; pageNumber++) {
           let text = extracted[pageNumber - 1]!.text;
-          if (text.length < 12) {
+          // pdf.js scrambles Arabic letter order inside ligature clusters, so Arabic pages
+          // always take the OCR path, which emits logical-order text from the rasterization.
+          const arabicBook = language.split('-')[0] === 'ar';
+          if (text.length < 12 || arabicBook) {
             const prefix = join(dir, `page-${pageNumber}`);
             await this.run('pdftoppm', [
               '-f',
@@ -67,24 +94,36 @@ export class PDFIngestor implements Ingestor {
               String(pageNumber),
               '-singlefile',
               '-scale-to',
-              '1800',
+              String(ocrScale(language)),
               '-png',
               path,
               prefix,
             ]);
             text = (
-              await this.run('tesseract', [prefix + '.png', 'stdout', '-l', 'eng', '--psm', '3'])
+              await this.run('tesseract', [
+                prefix + '.png',
+                'stdout',
+                '-l',
+                ocrLanguages(language),
+                '--oem',
+                '1',
+                '--psm',
+                '3',
+              ])
             ).trim();
+            if (sink)
+              images.push({
+                page: pageNumber,
+                asset_id: await sink(pageNumber, await readFile(prefix + '.png')),
+              });
           }
+          text = normalizeText(text);
           total += text.length;
           if (total > 60000) throw new DomainError('extracted_text_limit');
           if (!text) throw new DomainError('empty_page');
-          pages.push({ page: pageNumber, text });
+          pages.push({ page: pageNumber, text, language: detectPageLanguage(text, language) });
         }
-        const joined = pages.map((p) => p.text).join(' ');
-        const arabic = (joined.match(/[\u0600-\u06ff]/g) ?? []).length;
-        if (arabic > joined.length / 3) throw new DomainError('unsupported_source_language');
-        return { pages, language: 'en-GB', images: [] };
+        return { pages, language, images };
       }
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -93,12 +132,19 @@ export class PDFIngestor implements Ingestor {
 }
 // An injectable implementation keeps stage tests independent from native OCR binaries.
 export class FixtureIngestor implements Ingestor {
-  async extract(): Promise<ExtractedBook> {
+  async extract(_bytes: Uint8Array, language = 'en-GB'): Promise<ExtractedBook> {
     return {
       pages: [
-        { page: 1, text: 'Count one, two, three. One and one make two. Two and one make three.' },
+        {
+          page: 1,
+          text: 'Count one, two, three. One and one make two. Two and one make three.',
+          language: detectPageLanguage(
+            'Count one, two, three. One and one make two. Two and one make three.',
+            language,
+          ),
+        },
       ],
-      language: 'en-GB',
+      language,
       images: [],
     };
   }

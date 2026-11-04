@@ -25,6 +25,8 @@ service-account*.json
 doc/fixtures/books/*.pdf
 !doc/fixtures/books/counting.pdf
 !doc/fixtures/books/addition.pdf
+!doc/fixtures/books/arabic-counting.pdf
+!doc/fixtures/books/arabic-counting-scanned.pdf
 
 
 # Expo prebuild output; regenerate from mobile/app.json for native tests.

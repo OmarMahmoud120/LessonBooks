@@ -17,14 +17,14 @@ export const kidInput: Omit<Kid, 'id' | 'state'> = {
   grade_id: 'year-1',
   reading_level: 'emerging',
 };
-export async function setup() {
+export async function setup(overrides: Partial<Omit<Kid, 'id' | 'state'>> = {}) {
   const repo = new MemoryRepository();
   const assets = new MemoryAssets();
   const family = new FamilyService(repo, assets);
   await family.ensureParent('alice');
   await family.consent('alice', 'privacy');
   await family.consent('alice', 'content_rights');
-  const kid = await family.addKid('alice', kidInput);
+  const kid = await family.addKid('alice', { ...kidInput, ...overrides });
   return { repo, assets, family, kid };
 }
 describe('family boundaries and generation', () => {
@@ -92,6 +92,20 @@ describe('family boundaries and generation', () => {
       payload: { ...kidInput, birth_year: 2019, parent_id: 'alice' },
     });
     expect(invalid.statusCode).toBe(400);
+    const unsupported = await app.inject({
+      method: 'POST',
+      url: '/v1/kids',
+      headers: { authorization: 'Bearer bob' },
+      payload: { ...kidInput, language: 'fr' },
+    });
+    expect(unsupported.statusCode).toBe(400);
+    const arabic = await app.inject({
+      method: 'POST',
+      url: '/v1/kids',
+      headers: { authorization: 'Bearer bob' },
+      payload: { ...kidInput, language: 'ar' },
+    });
+    expect(arabic.statusCode).toBe(409);
     await app.close();
   });
   it('makes upload idempotent and prevents other families using the kid', async () => {
@@ -139,6 +153,29 @@ describe('family boundaries and generation', () => {
     await pipeline.run('alice', job_id);
     expect(await repo.list(familyPath('alice', 'lessons'))).toHaveLength(3);
   });
+  it('publishes three Arabic drafts with explicit language and direction', async () => {
+    const { family, kid, repo, assets } = await setup({ language: 'ar' });
+    const { job_id } = await family.upload(
+      'alice',
+      kid.id,
+      Buffer.from('%PDF-1.7 synthetic'),
+      'arabic-key-0001',
+    );
+    const pipeline = new Pipeline(
+      family,
+      new FixtureIngestor(),
+      new RoutedAI(new MockModelClient(), mockPolicy),
+    );
+    for (let stage = 0; stage < 6; stage++) await pipeline.run('alice', job_id);
+    const lessons = await repo.list<LessonRecord>(familyPath('alice', 'lessons'));
+    expect(lessons).toHaveLength(3);
+    for (const record of lessons) {
+      const lesson = JSON.parse(Buffer.from(await assets.get(record.storage_path)).toString());
+      expect(lesson.metadata.language).toBe('ar');
+      expect(lesson.metadata.direction).toBe('rtl');
+      expect(lesson.metadata.title).toHaveProperty('ar');
+    }
+  });
   it('deletion wins over a worker that is still extracting content', async () => {
     const { family, kid, repo, assets } = await setup();
     const { job_id } = await family.upload(
@@ -161,7 +198,7 @@ describe('family boundaries and generation', () => {
         extract: async () => {
           entered();
           await waiting;
-          return new FixtureIngestor().extract();
+          return new FixtureIngestor().extract(new Uint8Array());
         },
       },
       new RoutedAI(new MockModelClient(), mockPolicy),

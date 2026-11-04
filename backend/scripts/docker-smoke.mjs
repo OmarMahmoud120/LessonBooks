@@ -35,34 +35,44 @@ try {
       method: 'POST',
       body: JSON.stringify({ type, version: '2026-11-03', granted: true }),
     });
-  const kid = await api('/kids', {
-    method: 'POST',
-    body: JSON.stringify({
-      nickname: 'DockerFox',
-      avatar: 'fox',
-      grade_id: 'year-1',
-      age_band: '5-7',
-      country: 'GB-ENG',
-      language: 'en-GB',
-      curriculum_id: 'england-national-2014',
-      reading_level: 'emerging',
-    }),
-  });
-  const pdf = await readFile('doc/fixtures/books/counting.pdf');
-  const form = new FormData();
-  form.append('book', new Blob([pdf], { type: 'application/pdf' }), 'owned.pdf');
-  await api(`/books?kid_id=${kid.id}`, {
-    method: 'POST',
-    headers: { 'Idempotency-Key': `docker-${Date.now()}` },
-    body: form,
-  });
-  let lessons = [];
-  for (let attempt = 0; attempt < 90; attempt++) {
-    lessons = await api('/lessons');
-    if (lessons.length === 3) break;
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  async function createKid(nickname, language) {
+    return api('/kids', {
+      method: 'POST',
+      body: JSON.stringify({
+        nickname,
+        avatar: 'fox',
+        grade_id: 'year-1',
+        age_band: '5-7',
+        country: 'GB-ENG',
+        language,
+        curriculum_id: 'england-national-2014',
+        reading_level: 'emerging',
+      }),
+    });
   }
-  assert.equal(lessons.length, 3, 'worker must publish three drafts');
+  async function upload(kidId, filename) {
+    const pdf = await readFile(`doc/fixtures/books/${filename}`);
+    const form = new FormData();
+    form.append('book', new Blob([pdf], { type: 'application/pdf' }), 'owned.pdf');
+    await api(`/books?kid_id=${kidId}`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': `docker-${Date.now()}-${kidId}` },
+      body: form,
+    });
+  }
+  async function waitLessons(count) {
+    let lessons = [];
+    for (let attempt = 0; attempt < 240; attempt++) {
+      lessons = await api('/lessons');
+      if (lessons.length === count) break;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    assert.equal(lessons.length, count, `worker must publish ${count} drafts`);
+    return lessons;
+  }
+  const kid = await createKid('DockerFox', 'en-GB');
+  await upload(kid.id, 'counting.pdf');
+  let lessons = await waitLessons(3);
   const first = await api(`/lessons/${lessons[0].id}`);
   await api(`/lessons/${lessons[0].id}/approve`, {
     method: 'POST',
@@ -70,8 +80,17 @@ try {
   });
   await api(`/kids/${kid.id}`, { method: 'DELETE' });
   assert.equal((await api('/lessons')).length, 0);
+  // Phase 1 allows one kid per family, so the Arabic journey reuses the freed slot.
+  const arabicKid = await createKid('DockerArousa', 'ar');
+  await upload(arabicKid.id, 'arabic-counting-scanned.pdf');
+  lessons = await waitLessons(3);
+  const arabicFirst = await api(`/lessons/${lessons[0].id}`);
+  assert.equal(arabicFirst.lesson.metadata.language, 'ar');
+  assert.equal(arabicFirst.lesson.metadata.direction, 'rtl');
+  await api(`/kids/${arabicKid.id}`, { method: 'DELETE' });
+  assert.equal((await api('/lessons')).length, 0);
   console.log(
-    'Docker smoke passed: auth, consent, owned PDF, virus-scanned PDF ingestion, separate worker, approval, deletion.',
+    'Docker smoke passed: auth, consent, owned PDFs, virus-scanned ingestion, Arabic OCR by a separate worker, mocked Arabic lessons, approval, deletion.',
   );
 } finally {
   await api('/account', { method: 'DELETE' });

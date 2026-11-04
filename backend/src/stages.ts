@@ -2,7 +2,7 @@ import { assertLesson, semanticErrors } from '@lessonbooks/contracts';
 import { DomainError, type Job, type Kid, type Book } from './domain';
 import type { StageState, Topic, Outline } from './pipeline';
 import type { FamilyService } from './family';
-import type { Ingestor } from './ingest';
+import type { ImageSink, Ingestor } from './ingest';
 import { lessonSchema, type Accounting, type RoutedAI } from './ai';
 export type StageInput = {
   state: StageState;
@@ -52,8 +52,19 @@ const safetySchema = objectSchema(
 );
 
 export async function ingest(input: StageInput): Promise<StageOutput> {
-  const { state, book, family, ingestor } = input;
-  state.extracted = await ingestor.extract(await family.assets.get(book.source_path));
+  const { state, book, family, ingestor, kid } = input;
+  // Rasterized pages stay inside the isolated worker temp dir until the sink persists them
+  // beside the book source, where family scoping and deletion already apply.
+  const sink: ImageSink | undefined = async (page, bytes) => {
+    const assetId = `${book.source_path.replace(/\/source\.pdf$/, '')}/pages/page-${page}.png`;
+    await family.assets.put(assetId, bytes, 'image/png');
+    return assetId;
+  };
+  state.extracted = await ingestor.extract(
+    await family.assets.get(book.source_path),
+    kid.language,
+    sink,
+  );
   return state;
 }
 
