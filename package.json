@@ -41,6 +41,7 @@
     "docker:logs": "docker compose --env-file /dev/null logs -f",
     "docker:test": "node backend/scripts/docker-smoke.mjs",
     "eval:ocr": "node backend/eval/ocr-eval.mjs",
+    "eval:ocr:cloudflare": "tsx backend/eval/cloudflare-ocr.ts",
     "eval:markdown": "node backend/eval/cloudflare-markdown.mjs"
   },
   "devDependencies": {

@@ -10,18 +10,18 @@ import { createAPI } from '../src/api';
 import { Pipeline } from '../src/pipeline';
 import { PDFIngestor } from '../src/ingest';
 import { MockModelClient, RoutedAI, mockPolicy } from '../src/ai';
+import { testEmulatorEndpoints } from './emulator-config';
 
 it('uses actual Auth/Firestore/Storage emulators for PDF → three private drafts → approval → erasure', async () => {
-  process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
-  process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
-  process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
+  const endpoints = testEmulatorEndpoints();
+  Object.assign(process.env, endpoints);
   const app = initializeApp(
     { projectId: 'demo-lessonbooks', storageBucket: 'demo-lessonbooks.appspot.com' },
     'vertical-test',
   );
   const auth = getAuth(app);
   const signup = await fetch(
-    'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo',
+    `http://${endpoints.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

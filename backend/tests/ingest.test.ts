@@ -1,6 +1,7 @@
 import { it, expect } from 'vitest';
 import { readFile, writeFile } from 'node:fs/promises';
 import { PDFIngestor, normalizeText, detectPageLanguage } from '../src/ingest';
+import { CloudflareVisionOCR } from '../src/cloudflare-ocr';
 it('extracts an owned sample PDF in a bounded worker', async () => {
   const data = await readFile('doc/fixtures/books/counting.pdf');
   const extracted = await new PDFIngestor().extract(data);
@@ -76,4 +77,112 @@ it('detects page language by script dominance with a fallback', () => {
   expect(detectPageLanguage('مرحبا بكم في العد', 'en-GB')).toBe('ar');
   expect(detectPageLanguage('Count one two three', 'en-GB')).toBe('en');
   expect(detectPageLanguage('1234567890', 'ar')).toBe('ar');
+});
+
+it('routes a rasterized Arabic PDF through the injected vision adapter with usage and image refs', async () => {
+  const png = await readFile('doc/fixtures/books/arabic-counting-vocalized.png');
+  const calls: string[] = [];
+  const ocr = new CloudflareVisionOCR('a'.repeat(32), 'synthetic-token', async () =>
+    Response.json({
+      choices: [{ finish_reason: 'stop', message: { content: 'تُفَاحَةٌ وَاحِدَةٌ' } }],
+      usage: { prompt_tokens: 366, completion_tokens: 636 },
+    }),
+  );
+  const ingestor = new PDFIngestor(
+    true,
+    async (command, args) => {
+      calls.push(command);
+      if (command === 'pdftoppm') await writeFile(`${args.at(-1)}.png`, png);
+      return '';
+    },
+    ocr,
+  );
+  const sinks: Uint8Array[] = [];
+  const result = await ingestor.extract(
+    await readFile('doc/fixtures/books/arabic-counting.pdf'),
+    'ar',
+    async (_page, bytes) => {
+      sinks.push(bytes);
+      return 'synthetic/page-1.png';
+    },
+  );
+  expect(calls).toEqual(['clamscan', 'pdftoppm']);
+  expect(result.pages).toEqual([{ page: 1, text: 'تُفَاحَةٌ وَاحِدَةٌ', language: 'ar' }]);
+  expect(result.images).toEqual([{ page: 1, asset_id: 'synthetic/page-1.png' }]);
+  expect(sinks).toEqual([png]);
+  expect(result.ocr?.[0]).toMatchObject({
+    page: 1,
+    provider: 'cloudflare',
+    prompt_version: 'ocr.ar.v1',
+    prompt_tokens: 366,
+  });
+  expect(result.ocr?.[0]).not.toHaveProperty('text');
+});
+
+it('rejects books exceeding the hosted page allowance before rasterization or transport', async () => {
+  // Minimal owned two-page PDF, with valid offsets; no parser or native-process mocks.
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << >> >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << >> >>',
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = objects.map((object, i) => {
+    const offset = Buffer.byteLength(pdf);
+    pdf += `${i + 1} 0 obj\n${object}\nendobj\n`;
+    return offset;
+  });
+  const start = Buffer.byteLength(pdf);
+  pdf += `xref\n0 5\n0000000000 65535 f \n${offsets.map((offset) => String(offset).padStart(10, '0') + ' 00000 n \n').join('')}trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF\n`;
+  let nativeCalls = 0;
+  let requests = 0;
+  const ingestor = new PDFIngestor(
+    false,
+    async () => {
+      nativeCalls++;
+      return '';
+    },
+    new CloudflareVisionOCR('a'.repeat(32), 'synthetic-token', async () => {
+      requests++;
+      return new Response();
+    }),
+  );
+  await expect(ingestor.extract(Buffer.from(pdf), 'ar')).rejects.toThrow('ocr_page_limit');
+  expect(nativeCalls).toBe(0);
+  expect(requests).toBe(0);
+});
+
+it('fails hosted ingestion without persisting images or silently falling back to local OCR', async () => {
+  const png = await readFile('doc/fixtures/books/arabic-counting-vocalized.png');
+  const calls: string[] = [];
+  let rasterPath = '';
+  let sinks = 0;
+  const ingestor = new PDFIngestor(
+    false,
+    async (command, args) => {
+      calls.push(command);
+      rasterPath = `${args.at(-1)}.png`;
+      await writeFile(rasterPath, png);
+      return '';
+    },
+    new CloudflareVisionOCR('a'.repeat(32), 'synthetic-token', async () =>
+      Response.json({
+        choices: [{ finish_reason: 'length', message: { content: 'نص جزئي' } }],
+      }),
+    ),
+  );
+  await expect(
+    ingestor.extract(
+      await readFile('doc/fixtures/books/arabic-counting-scanned.pdf'),
+      'ar',
+      async () => {
+        sinks++;
+        return '';
+      },
+    ),
+  ).rejects.toThrow('ocr_incomplete');
+  expect(calls).toEqual(['pdftoppm']);
+  expect(sinks).toBe(0);
+  await expect(readFile(rasterPath)).rejects.toMatchObject({ code: 'ENOENT' });
 });

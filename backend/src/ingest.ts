@@ -5,11 +5,13 @@ import { mkdtemp, writeFile, readFile, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DomainError } from './domain';
+import type { PageOCR, PageOCRResult } from './page-ocr';
 
 export type ExtractedBook = {
   pages: { page: number; text: string; language?: 'en' | 'ar' }[];
   language: string;
   images: { page: number; asset_id: string }[];
+  ocr?: ({ page: number } & Omit<PageOCRResult, 'text'>)[];
 };
 // Persisted page images inherit family storage scoping and deletion.
 export type ImageSink = (page: number, bytes: Uint8Array) => Promise<string>;
@@ -65,20 +67,29 @@ export class PDFIngestor implements Ingestor {
   constructor(
     private requireScan = false,
     private run = runProcess,
+    private pageOCR?: PageOCR,
   ) {}
   async extract(bytes: Uint8Array, language = 'en-GB', sink?: ImageSink): Promise<ExtractedBook> {
     if (!(SUPPORTED_LANGUAGES as readonly string[]).includes(language))
       throw new DomainError('unsupported_source_language');
     if (bytes.length > 15 * 1024 * 1024) throw new DomainError('upload_too_large');
+    if (this.pageOCR && !this.pageOCR.languages.includes(language))
+      throw new DomainError('ocr_language_not_supported');
     const dir = await mkdtemp(join(tmpdir(), 'lessonbooks-ingest-'));
     const path = join(dir, 'book.pdf');
     await writeFile(path, bytes);
     try {
       if (this.requireScan) await this.run('clamscan', ['--no-summary', '--', path]);
       const extracted = await parsePDF(bytes);
+      // Reject the whole book before the first paid call; never produce partial paid ingestion.
+      const ocrPages = extracted.filter(
+        (page) => page.text.length < 12 || language === 'ar',
+      ).length;
+      if (this.pageOCR && ocrPages > this.pageOCR.maxPages) throw new DomainError('ocr_page_limit');
       {
         const pages: ExtractedBook['pages'] = [];
         const images: ExtractedBook['images'] = [];
+        const ocr: NonNullable<ExtractedBook['ocr']> = [];
         let total = 0;
         for (let pageNumber = 1; pageNumber <= extracted.length; pageNumber++) {
           let text = extracted[pageNumber - 1]!.text;
@@ -99,18 +110,26 @@ export class PDFIngestor implements Ingestor {
               path,
               prefix,
             ]);
-            text = (
-              await this.run('tesseract', [
-                prefix + '.png',
-                'stdout',
-                '-l',
-                ocrLanguages(language),
-                '--oem',
-                '1',
-                '--psm',
-                '3',
-              ])
-            ).trim();
+            if (this.pageOCR) {
+              const { text: transcription, ...usage } = await this.pageOCR.transcribe(
+                await readFile(prefix + '.png'),
+                language,
+              );
+              text = transcription;
+              ocr.push({ page: pageNumber, ...usage });
+            } else
+              text = (
+                await this.run('tesseract', [
+                  prefix + '.png',
+                  'stdout',
+                  '-l',
+                  ocrLanguages(language),
+                  '--oem',
+                  '1',
+                  '--psm',
+                  '3',
+                ])
+              ).trim();
             if (sink)
               images.push({
                 page: pageNumber,
@@ -123,7 +142,7 @@ export class PDFIngestor implements Ingestor {
           if (!text) throw new DomainError('empty_page');
           pages.push({ page: pageNumber, text, language: detectPageLanguage(text, language) });
         }
-        return { pages, language, images };
+        return { pages, language, images, ...(ocr.length ? { ocr } : {}) };
       }
     } finally {
       await rm(dir, { recursive: true, force: true });

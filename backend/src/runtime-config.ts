@@ -16,6 +16,9 @@ function pattern(value: string, expression: RegExp, code: string): string {
   return value;
 }
 export function runtimeConfig(env: Record<string, string | undefined>): RuntimeConfig {
+  // Hosted OCR is evaluation-only until family consent, residency and persisted spend controls exist.
+  if (env.OCR_PROVIDER !== undefined && env.OCR_PROVIDER !== 'local')
+    throw new Error('hosted_ocr_not_approved_for_family_uploads');
   if (env.LIVE_AI_APPROVED === 'true')
     throw new Error('Use reviewed cloud configuration before production/live AI.');
   const roles = ['api', 'worker', 'all'] as const;

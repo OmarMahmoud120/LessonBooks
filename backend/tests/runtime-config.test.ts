@@ -63,6 +63,22 @@ it('rejects live AI before any mode decision', () => {
     'Use reviewed cloud configuration before production/live AI.',
   );
 });
+it.each(['cloudflare', 'unknown', ''])(
+  'rejects hosted OCR selection %j for family workers in every mode',
+  (OCR_PROVIDER) => {
+    for (const env of [{ OCR_PROVIDER }, { ...cloudEnv, OCR_PROVIDER }])
+      expect(() => runtimeConfig(env)).toThrow('hosted_ocr_not_approved_for_family_uploads');
+  },
+);
+it('keeps local OCR available even when Cloudflare credentials are injected for separate evaluation', () => {
+  expect(
+    runtimeConfig({
+      OCR_PROVIDER: 'local',
+      CLOUDFLARE_API_KEY: 'synthetic-token',
+      CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32),
+    }).mode,
+  ).toBe('emulator');
+});
 it.each([
   { NODE_ENV: 'production' },
   { SERVICE_ROLE: 'unknown' },

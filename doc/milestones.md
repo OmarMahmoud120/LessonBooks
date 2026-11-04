@@ -39,6 +39,11 @@ remaining criteria below prevent a full phase-complete claim.
       text-bearing PDFs convert with extra heading noise, image-only PDFs yield no text, and the
       image path returns a description rather than a transcription. Not adopted for ingestion.
 
+- [x] Evaluation-only Cloudflare Gemma page OCR adapter and PDF integration, versioned
+      Arabic transcription prompt, one-request cap and owned-fixture runner. Direct vision
+      evidence is limited to one page; family runtime remains local and rejects hosted OCR
+      selection. See doc/cloudflare-ocr.md and ADR 0011.
+
 ## Remaining Phase 0 evidence
 
 - [ ] Native smoke sessions for every role/command in each supported agent. Claude CLI is absent;
@@ -62,7 +67,9 @@ remaining criteria below prevent a full phase-complete claim.
 - [x] Two-book mocked prompt evaluation across both grades; real-model before/after reports remain pending.
 - [ ] Region, retention/tombstone policy, legally sufficient parental consent and vendor processing review.
 
-No live family data, paid AI calls, MCP connections, pushes or deployments have been performed.
+No live family data, MCP connections, pushes or deployments have been performed.
+The user authorized and ran synthetic-only Cloudflare conversion/vision requests; see
+the evaluation reports. No additional paid requests ran for the OCR adapter integration.
 The local entrypoint explicitly refuses production/live mode. Mocked validation is not evidence of
 real-model safety, source grounding or educational effectiveness.
 

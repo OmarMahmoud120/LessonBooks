@@ -7,18 +7,22 @@ import {
 import { getDoc, setDoc, doc } from 'firebase/firestore';
 import { getBytes, uploadBytes, ref } from 'firebase/storage';
 import { readFileSync } from 'node:fs';
+import { testEmulatorEndpoints } from './emulator-config';
 let env: RulesTestEnvironment;
 beforeAll(async () => {
+  const endpoints = testEmulatorEndpoints();
+  const firestore = new URL(`http://${endpoints.FIRESTORE_EMULATOR_HOST}`);
+  const storage = new URL(`http://${endpoints.FIREBASE_STORAGE_EMULATOR_HOST}`);
   env = await initializeTestEnvironment({
     projectId: 'demo-lessonbooks',
     firestore: {
-      host: '127.0.0.1',
-      port: 8080,
+      host: firestore.hostname,
+      port: Number(firestore.port),
       rules: readFileSync('backend/infra/firestore.rules', 'utf8'),
     },
     storage: {
-      host: '127.0.0.1',
-      port: 9199,
+      host: storage.hostname,
+      port: Number(storage.port),
       rules: readFileSync('backend/infra/storage.rules', 'utf8'),
     },
   });
