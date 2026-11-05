@@ -57,3 +57,7 @@ commands and the remaining production gates. This change performs no new paid ca
 Mocked prompt evaluation before/after retains generation prompt version 1, policy
 version 1, valid schemas, answer consistency, grade fit and private drafts at $0.
 OCR tests prove adapter behavior, not real-model accuracy or residency guarantees.
+
+Follow-up: [ADR 0012](0012-selectable-ocr-for-owned-synthetic-development.md) adds
+a gated runtime selector for owned synthetic emulator runs while retaining the
+production/family-data boundary.

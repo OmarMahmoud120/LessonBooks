@@ -60,6 +60,7 @@ services:
       <<: *local-env
       SERVICE_ROLE: worker
       REQUIRE_SCAN: 'true'
+      OCR_PROVIDER: ${OCR_PROVIDER:-local}
     mem_limit: 1536m
     volumes: [scanner-data:/var/lib/clamav:ro]
     depends_on:

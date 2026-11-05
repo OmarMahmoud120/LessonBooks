@@ -93,3 +93,12 @@ separated worker, and the native-tools smoke passes clamscan, rasterization and 
 non-root worker container. First validation failed twice before passing: the smoke script posted
 consents before the parent account existed, and the bundle read prompts plus the mock fixture
 from paths the image did not package; both are fixed and covered by the passing runs.
+
+## Optional Cloudflare OCR development
+
+OCR_PROVIDER defaults to local on the worker. The optional compose.cloudflare.yaml
+overlay injects Cloudflare settings and adds worker egress for explicitly approved,
+owned-fixture evaluation. The API receives no Cloudflare credentials. Production
+selection remains blocked, and the hosted path rejects unknown PDF hashes. See
+[Cloudflare OCR](cloudflare-ocr.md#backend-switch) for commands, limits and approval
+settings. The default compose.yaml keeps the worker on its private network.

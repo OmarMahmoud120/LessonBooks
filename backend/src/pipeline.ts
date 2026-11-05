@@ -124,6 +124,22 @@ export class Pipeline {
         family,
         account,
         ingestor: this.ingestor,
+        beforeHostedOCR: () =>
+          family.repo.atomic(async (tx) => {
+            const path = familyPath(uid, 'generation_jobs', job.id);
+            const current = await tx.get<Job>(path);
+            await family.active(tx, uid, job.kid_id);
+            if (
+              !current ||
+              current.status !== 'running' ||
+              current.fence !== job.fence ||
+              current.stage !== 'ingest' ||
+              current.lease_until <= this.now()
+            )
+              throw new DomainError('ocr_stale_worker');
+            if (current.hosted_ocr_attempted) throw new DomainError('ocr_already_attempted');
+            tx.put(path, { ...current, hosted_ocr_attempted: true });
+          }),
         ai: this.ai,
       });
       attemptPath = `families/${uid}/kids/${job.kid_id}/jobs/${job.id}/${job.fence}-${randomUUID()}/`;
@@ -192,6 +208,7 @@ export class Pipeline {
         const qualityFailure = ['lesson_quality_failed', 'answer_key_invalid'].includes(code);
         const repair = qualityFailure && (current.repair_count ?? 0) < 2;
         const permanent =
+          code.startsWith('ocr_') ||
           (qualityFailure && !repair) ||
           [
             'budget_exceeded',

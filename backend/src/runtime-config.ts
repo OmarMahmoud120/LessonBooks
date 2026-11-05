@@ -5,6 +5,8 @@ export type RuntimeConfig = {
   host: string;
   port: number;
   requireScan: boolean;
+  ocrProvider: 'local' | 'cloudflare';
+  ocrMaxRequests: number;
   endpoints: Record<string, string>;
   projectId?: string;
   queuePath?: string;
@@ -16,15 +18,26 @@ function pattern(value: string, expression: RegExp, code: string): string {
   return value;
 }
 export function runtimeConfig(env: Record<string, string | undefined>): RuntimeConfig {
-  // Hosted OCR is evaluation-only until family consent, residency and persisted spend controls exist.
-  if (env.OCR_PROVIDER !== undefined && env.OCR_PROVIDER !== 'local')
-    throw new Error('hosted_ocr_not_approved_for_family_uploads');
+  const ocrProvider = env.OCR_PROVIDER ?? 'local';
+  if (ocrProvider !== 'local' && ocrProvider !== 'cloudflare')
+    throw new Error('invalid_ocr_provider');
   if (env.LIVE_AI_APPROVED === 'true')
     throw new Error('Use reviewed cloud configuration before production/live AI.');
   const roles = ['api', 'worker', 'all'] as const;
   const selected = roles.find((candidate) => candidate === env.SERVICE_ROLE);
   if (env.SERVICE_ROLE !== undefined && !selected) throw new Error('invalid_service_role');
   const role: (typeof roles)[number] = selected ?? 'all';
+  let ocrMaxRequests = 0;
+  if (ocrProvider === 'cloudflare') {
+    // The selectable hosted path is restricted to owned fixtures in the emulator runtime.
+    if (env.CLOUD_RUNTIME_APPROVED === 'true' || env.NODE_ENV === 'production')
+      throw new Error('hosted_ocr_not_approved_for_family_uploads');
+    if (role !== 'api' && env.CLOUDFLARE_OCR_APPROVED !== 'true')
+      throw new Error('cloudflare_ocr_approval_required');
+    ocrMaxRequests = Number(env.CLOUDFLARE_OCR_MAX_REQUESTS ?? '1');
+    if (!Number.isInteger(ocrMaxRequests) || ocrMaxRequests < 1 || ocrMaxRequests > 4)
+      throw new Error('invalid_ocr_request_limit');
+  }
   const host = env.HOST ?? '127.0.0.1';
   if (!['127.0.0.1', '0.0.0.0'].includes(host)) throw new Error('invalid_bind_host');
   const port = Number(env.PORT ?? '3001');
@@ -80,6 +93,8 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
       host,
       port,
       requireScan: env.REQUIRE_SCAN !== 'false',
+      ocrProvider,
+      ocrMaxRequests,
       endpoints: {},
       projectId,
       queuePath: `projects/${projectId}/locations/${location}/queues/${queue}`,
@@ -108,6 +123,8 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
     host,
     port,
     requireScan: env.REQUIRE_SCAN === 'true',
+    ocrProvider,
+    ocrMaxRequests,
     endpoints,
   };
 }

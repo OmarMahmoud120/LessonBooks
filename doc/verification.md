@@ -141,3 +141,30 @@ emulator bindings changed to 19099/18080/19199 (hub 14400, logging 14500) during
 run; the tracked firebase.json was restored byte-for-byte afterward. The existing
 development emulator stack was not stopped or reconfigured. All verification was
 synthetic/mocked, and no new paid request ran.
+
+## OCR provider environment switch — 2026-11-05
+
+OCR_PROVIDER now selects local (default) or cloudflare in the backend runtime.
+Cloudflare requires explicit development-run approval and injected credentials;
+production remains rejected. Only the four owned PDF hashes are accepted. Fresh
+per-book clients retain the one-page Arabic bound, and the worker shares a 1–4
+attempt cap. Text-bearing English fixtures bypass OCR. The persisted job claim
+checks active family/kid state, stage, lease and fence before transport and prevents
+repeat sends after restart or downstream failure. This adds attempt idempotency,
+not monetary budget reservation or approval for real family data.
+
+Security/privacy/schema self-review confirmed that no credentials enter runtime
+configuration output, API-only processes or client bundles. The existing job record
+owns the new marker and family deletion removes it. The optional Compose overlay
+adds worker-only settings and egress; default worker networking stays private.
+Existing page-image lifecycle and cloud-transport launch issues remain open.
+No independent reviewer or native-device verification is claimed for this change.
+
+Full npm run check passed: 21 Node tests, 171 unit tests, eight browser tests and
+three emulator tests, with lint, types, generated artifacts, fixtures, mocked
+prompt evaluation and builds. Runtime bundle packaging also passed. Compose
+configuration was resolved with synthetic credentials, without starting services.
+The full check used temporary isolated loopback emulator ports, with the original
+tracked configuration restored afterward. Host Node remains 23.7.0; supported
+Node >=24 execution is still unverified. No live provider call, download, push or
+deployment was performed for the selector.

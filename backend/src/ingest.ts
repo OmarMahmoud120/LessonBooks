@@ -15,9 +15,15 @@ export type ExtractedBook = {
 };
 // Persisted page images inherit family storage scoping and deletion.
 export type ImageSink = (page: number, bytes: Uint8Array) => Promise<string>;
+export type BeforeHostedOCR = () => Promise<void>;
 export const SUPPORTED_LANGUAGES = ['en-GB', 'ar'] as const;
 export interface Ingestor {
-  extract(bytes: Uint8Array, language?: string, sink?: ImageSink): Promise<ExtractedBook>;
+  extract(
+    bytes: Uint8Array,
+    language?: string,
+    sink?: ImageSink,
+    beforeHostedOCR?: BeforeHostedOCR,
+  ): Promise<ExtractedBook>;
 }
 export function runProcess(command: string, args: string[], timeout = 60000): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -73,8 +79,6 @@ export class PDFIngestor implements Ingestor {
     if (!(SUPPORTED_LANGUAGES as readonly string[]).includes(language))
       throw new DomainError('unsupported_source_language');
     if (bytes.length > 15 * 1024 * 1024) throw new DomainError('upload_too_large');
-    if (this.pageOCR && !this.pageOCR.languages.includes(language))
-      throw new DomainError('ocr_language_not_supported');
     const dir = await mkdtemp(join(tmpdir(), 'lessonbooks-ingest-'));
     const path = join(dir, 'book.pdf');
     await writeFile(path, bytes);
@@ -85,6 +89,8 @@ export class PDFIngestor implements Ingestor {
       const ocrPages = extracted.filter(
         (page) => page.text.length < 12 || language === 'ar',
       ).length;
+      if (this.pageOCR && ocrPages > 0 && !this.pageOCR.languages.includes(language))
+        throw new DomainError('ocr_language_not_supported');
       if (this.pageOCR && ocrPages > this.pageOCR.maxPages) throw new DomainError('ocr_page_limit');
       {
         const pages: ExtractedBook['pages'] = [];

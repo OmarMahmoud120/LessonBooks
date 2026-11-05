@@ -1,10 +1,52 @@
 # Cloudflare vision OCR
 
-Cloudflare Gemma vision is an **evaluation-only backend adapter**, injectable into
-`PDFIngestor`. The API and worker still instantiate local Tesseract. Setting
-`OCR_PROVIDER=cloudflare` fails startup in emulator and cloud modes. Credentials
-alone never select the hosted provider. No family uploads are authorized for it.
-See [ADR 0011](decisions/0011-cloudflare-vision-ocr-evaluation-adapter.md).
+The backend selects OCR through **OCR_PROVIDER=local|cloudflare**, defaulting to
+local Tesseract. Restart the backend after changing the value. Unknown values fail
+startup. Cloudflare is available only for the owned synthetic PDFs in emulator
+mode; cloud/production family processing remains blocked. See [ADR 0012](decisions/0012-selectable-ocr-for-owned-synthetic-development.md).
+
+## Backend switch
+
+Local (also the default when unset):
+
+```sh
+OCR_PROVIDER=local npm run dev
+```
+
+For a separately approved, potentially billable synthetic run, inject
+CLOUDFLARE_API_KEY and CLOUDFLARE_ACCOUNT_ID into the backend process, then:
+
+```sh
+OCR_PROVIDER=cloudflare CLOUDFLARE_OCR_APPROVED=true CLOUDFLARE_OCR_MAX_REQUESTS=1 npm run dev
+```
+
+The entrypoint reads process environment variables; these commands do not load a
+file automatically. Do not paste keys into chat or commit them. Agent access to
+secret files remains prohibited. The approval flag records the operator's decision
+for this development run; it does not grant production or family-data approval.
+API-only processes do not need Cloudflare credentials; the worker performs OCR.
+Generation continues to use mocked AI regardless of the OCR provider.
+
+The Cloudflare runtime accepts only the exact committed counting.pdf, addition.pdf,
+arabic-counting.pdf and arabic-counting-scanned.pdf bytes, checked by SHA-256.
+Unknown or modified uploads fail before transport. Only Arabic OCR is supported;
+English text-bearing PDFs bypass OCR. The current allowance remains one OCR page
+per book. Each book gets a fresh client, while the worker shares a request cap of
+1 by default, configurable from 1 through 4. Restarting resets the process cap, but
+a job's persisted attempt marker prevents a second send for the same job.
+New jobs are separate attempts. This is not account-wide monetary budget enforcement.
+
+Docker keeps the default worker network private. For the explicitly approved
+synthetic run, use the optional overlay, with credentials already injected into
+the shell environment:
+
+```sh
+OCR_PROVIDER=cloudflare CLOUDFLARE_OCR_APPROVED=true docker compose --env-file /dev/null -f compose.yaml -f compose.cloudflare.yaml up --build -d --wait
+```
+
+This overlay supplies credentials and outbound connectivity to the worker only.
+Changing OCR_PROVIDER back to local selects Tesseract; omit the overlay to restore
+the default network isolation. No image rebuild embeds credential values.
 
 ## Evidence and pricing
 
@@ -50,9 +92,12 @@ pricing, retries and document complexity change costs. Lesson generation is extr
   provider, model, prompt version, token counts and estimated cost metadata.
 
 These are evaluation request bounds, **not persisted production spend enforcement**.
-The adapter does not reserve from a generation-job budget. Creating a new instance
-in another process can spend again. Production needs durable idempotency and
-worst-case cost reservation/reconciliation, including failures and stage retries.
+The worker transactionally marks each job before its hosted request, checking active
+family/kid state, stage, lease and fence. Marked jobs cannot send again after a crash,
+downstream failure or restart. OCR errors are terminal. Missing usage/failed sends
+retain the marker. This does not reserve dollars from a generation-job budget;
+production still needs worst-case monetary reservation/reconciliation. The standalone
+image evaluator uses its output-file claim rather than the pipeline job marker.
 
 ## Running the synthetic evaluation
 
@@ -100,7 +145,7 @@ full integration check passed with 21 Node tests, 151 unit tests, eight browser
 tests and three emulator tests; see the integration review in [verification.md](verification.md).
 
 Before family use: approve processor terms, region, retention and parent notices;
-add persisted per-job spend reservations and call idempotency; check cancellation,
+add persisted per-job monetary spend reservations; check cancellation,
 lease fencing and family deletion before sends and writes; review routing policy;
 then evaluate a broader owned corpus with parent-review expectations. Existing
 family consent records do not grant new processor approval. Deployment and live

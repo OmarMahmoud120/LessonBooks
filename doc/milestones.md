@@ -41,14 +41,15 @@ remaining criteria below prevent a full phase-complete claim.
 
 - [x] Evaluation-only Cloudflare Gemma page OCR adapter and PDF integration, versioned
       Arabic transcription prompt, one-request cap and owned-fixture runner. Direct vision
-      evidence is limited to one page; family runtime remains local and rejects hosted OCR
-      selection. See doc/cloudflare-ocr.md and ADR 0011.
+      evidence is limited to one page. OCR_PROVIDER selects local or Cloudflare for approved
+      owned-fixture emulator runs; production remains gated. Persisted attempt claims prevent
+      repeat hosted sends. See doc/cloudflare-ocr.md and ADRs 0011–0012.
 
 ## Remaining Phase 0 evidence
 
 - [ ] Native smoke sessions for every role/command in each supported agent. Claude CLI is absent;
       a second independent review attempt hit the account usage limit. Adapter tests do not replace this.
-- [x] Current check evidence: 8 agent-policy plus 13 evaluator tests, 151 unit, 8 browser and
+- [x] Current check evidence: 8 agent-policy plus 13 evaluator tests, 171 unit, 8 browser and
       3 emulator tests; the full integration check passed using temporary isolated loopback
       emulator ports, with the tracked configuration restored afterward. See verification.md.
 

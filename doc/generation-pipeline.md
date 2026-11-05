@@ -23,3 +23,12 @@ Prompts: versioned Markdown files with declared inputs; substitute data through 
 Phase 1 supports review/approval. Editing, feedback-driven regeneration and assignment UX remain later phases. Baseline safety checks and deletion are not deferred.
 
 Implemented: six exported typed stage functions, persisted stage attempts and fences, mocked decision routing, schema/answer checks, and a separate repair_count limited to two regeneration transitions on quality rejection. Actual model quality, language identification beyond the initial heuristic, source-image extraction and production moderation are unverified. The evaluation harness runs two owned digital PDFs across both grades through deterministic mocks; real-model and before/after comparison reports are still pending.
+
+Synthetic OCR selection: OCR_PROVIDER defaults to local and can select Cloudflare
+only for approved owned-fixture runs against the emulators. Before a hosted send,
+the worker transactionally verifies active family/kid state, the ingest stage,
+status, lease and fence, then records hosted_ocr_attempted on the generation job.
+The marker survives restart and downstream failures; a marked job never sends again.
+OCR errors are terminal. The worker also caps total attempts per process at 1–4.
+This is an attempt bound, not monetary budget enforcement or family-data approval.
+See doc/cloudflare-ocr.md and ADR 0012 for source, language and page restrictions.

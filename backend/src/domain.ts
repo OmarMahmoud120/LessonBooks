@@ -66,6 +66,7 @@ export type Job = {
   usage: Usage[];
   budget_usd: number;
   reserved_usd: number;
+  hosted_ocr_attempted?: boolean;
   repair_count: number;
   prompt_version: string;
   policy_version: string;

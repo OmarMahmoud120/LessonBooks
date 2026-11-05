@@ -1,0 +1,12 @@
+# Optional owned-fixture OCR development overlay. Default compose keeps worker egress blocked.
+services:
+  worker:
+    environment:
+      OCR_PROVIDER: ${OCR_PROVIDER:-local}
+      CLOUDFLARE_OCR_APPROVED: ${CLOUDFLARE_OCR_APPROVED:-false}
+      CLOUDFLARE_OCR_MAX_REQUESTS: ${CLOUDFLARE_OCR_MAX_REQUESTS:-1}
+      CLOUDFLARE_API_KEY: ${CLOUDFLARE_API_KEY:-}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+    networks: [private, cloudflare-ocr]
+networks:
+  cloudflare-ocr: {}

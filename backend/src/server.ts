@@ -8,7 +8,7 @@ import { FirestoreRepository, StorageAssets } from './persistence';
 import { FamilyService } from './family';
 import { createAPI } from './api';
 import { Pipeline } from './pipeline';
-import { PDFIngestor } from './ingest';
+import { createRuntimeIngestor } from './runtime-ingestor';
 import { MockModelClient, RoutedAI, mockPolicy } from './ai';
 import { familyPath, type Parent, type Job } from './domain';
 import { CloudTasksOidcVerifier, createWorkerApp } from './worker';
@@ -16,6 +16,7 @@ import { CloudTasksPublisher, OutboxSweeper } from './transport';
 
 // Emulator mode keeps the local polling worker; cloud mode dispatches via Cloud Tasks.
 const config = runtimeConfig(process.env);
+const ingestor = createRuntimeIngestor(config, process.env);
 const projectId = config.mode === 'cloud' ? config.projectId! : 'demo-lessonbooks';
 const firebase = initializeApp({ projectId, storageBucket: `${projectId}.appspot.com` });
 Object.assign(process.env, config.endpoints);
@@ -29,11 +30,7 @@ const families = new FamilyService(repo, assets, async (uid) => {
     if ((error as { code?: string }).code !== 'auth/user-not-found') throw error;
   }
 });
-const pipeline = new Pipeline(
-  families,
-  new PDFIngestor(config.requireScan),
-  new RoutedAI(new MockModelClient(), mockPolicy),
-);
+const pipeline = new Pipeline(families, ingestor, new RoutedAI(new MockModelClient(), mockPolicy));
 const app =
   config.mode === 'cloud' && config.role === 'worker'
     ? createWorkerApp(
@@ -116,7 +113,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const)
   });
 await app.listen({ port: config.port, host: config.host });
 console.log(
-  `LessonBooks ${config.mode} ${config.role}: port ${config.port} (${
+  `LessonBooks ${config.mode} ${config.role}: port ${config.port}; OCR=${config.role === 'api' ? 'unused' : config.ocrProvider} (${
     config.mode === 'cloud'
       ? 'mocked AI; live provider remains gated'
       : 'emulators + mocked AI; synthetic content only'

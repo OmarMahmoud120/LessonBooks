@@ -13,7 +13,7 @@ export function estimateOCRCost(input: number, output: number): number {
   return (input * 0.1 + output * 0.3) / 1_000_000;
 }
 
-// Evaluation adapter only: no production factory or server import enables this provider.
+// Owned-fixture evaluation adapter; runtime selection enforces approval and source restrictions.
 // One instance permits one attempted request, including failures and indeterminate timeouts.
 export class CloudflareVisionOCR implements PageOCR {
   readonly maxPages = 1;

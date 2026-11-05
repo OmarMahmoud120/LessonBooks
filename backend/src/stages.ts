@@ -2,7 +2,7 @@ import { assertLesson, semanticErrors } from '@lessonbooks/contracts';
 import { DomainError, type Job, type Kid, type Book } from './domain';
 import type { StageState, Topic, Outline } from './pipeline';
 import type { FamilyService } from './family';
-import type { ImageSink, Ingestor } from './ingest';
+import type { BeforeHostedOCR, ImageSink, Ingestor } from './ingest';
 import { lessonSchema, type Accounting, type RoutedAI } from './ai';
 export type StageInput = {
   state: StageState;
@@ -12,6 +12,7 @@ export type StageInput = {
   family: FamilyService;
   account: Accounting;
   ingestor: Ingestor;
+  beforeHostedOCR?: BeforeHostedOCR;
   ai: RoutedAI;
 };
 export type StageOutput = StageState;
@@ -64,6 +65,7 @@ export async function ingest(input: StageInput): Promise<StageOutput> {
     await family.assets.get(book.source_path),
     kid.language,
     sink,
+    input.beforeHostedOCR,
   );
   return state;
 }

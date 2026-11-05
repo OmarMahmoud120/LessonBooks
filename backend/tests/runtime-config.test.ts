@@ -63,11 +63,30 @@ it('rejects live AI before any mode decision', () => {
     'Use reviewed cloud configuration before production/live AI.',
   );
 });
-it.each(['cloudflare', 'unknown', ''])(
-  'rejects hosted OCR selection %j for family workers in every mode',
-  (OCR_PROVIDER) => {
-    for (const env of [{ OCR_PROVIDER }, { ...cloudEnv, OCR_PROVIDER }])
-      expect(() => runtimeConfig(env)).toThrow('hosted_ocr_not_approved_for_family_uploads');
+it.each(['unknown', '', 'Cloudflare'])('rejects invalid OCR provider %j', (OCR_PROVIDER) => {
+  expect(() => runtimeConfig({ OCR_PROVIDER })).toThrow('invalid_ocr_provider');
+});
+it('requires explicit hosted evaluation approval and blocks production regardless of that flag', () => {
+  expect(() => runtimeConfig({ OCR_PROVIDER: 'cloudflare' })).toThrow(
+    'cloudflare_ocr_approval_required',
+  );
+  expect(() =>
+    runtimeConfig({ ...cloudEnv, OCR_PROVIDER: 'cloudflare', CLOUDFLARE_OCR_APPROVED: 'true' }),
+  ).toThrow('hosted_ocr_not_approved_for_family_uploads');
+  expect(
+    runtimeConfig({ OCR_PROVIDER: 'cloudflare', CLOUDFLARE_OCR_APPROVED: 'true' }),
+  ).toMatchObject({ ocrProvider: 'cloudflare', ocrMaxRequests: 1, mode: 'emulator' });
+});
+it.each(['0', '5', '-1', '1.5', '', 'NaN'])(
+  'rejects invalid hosted request cap %j',
+  (CLOUDFLARE_OCR_MAX_REQUESTS) => {
+    expect(() =>
+      runtimeConfig({
+        OCR_PROVIDER: 'cloudflare',
+        CLOUDFLARE_OCR_APPROVED: 'true',
+        CLOUDFLARE_OCR_MAX_REQUESTS,
+      }),
+    ).toThrow('invalid_ocr_request_limit');
   },
 );
 it('keeps local OCR available even when Cloudflare credentials are injected for separate evaluation', () => {

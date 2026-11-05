@@ -30,3 +30,9 @@ Lesson status does not encode assignment; assignments are separate records. Appr
 Implementation note (2026-11-05): queued play events live in a bounded browser localStorage queue (500 events, 50 per batch) and the lesson cache is best-effort local storage, so both are outside the private namespace and untrusted. The API derives kid identity from the stored lesson, rejects revision mismatches and duplicates by event_id, and never accepts a client-supplied kid_id. Clearing local storage loses undelivered events; the queue is not a durable server-side ledger.
 
 Implementation note (2026-11-04): deletion erases family collections/assets before removing Auth, then retains a minimal UID/state tombstone to reject already-authenticated in-flight requests. The local worker resumes roots marked deleting. Tombstone retention and any backup guarantees need legal review before live use.
+
+Owned-fixture OCR development stores hosted_ocr_attempted on a generation job before
+transport. This operational marker prevents duplicate hosted sends after a crash or
+retry and is erased with the family's generation jobs. It adds no provider-visible
+profile data. Token/cost metadata remains scoped to extracted stage state; the flag
+is not evidence of a reserved monetary budget. See ADR 0012.
