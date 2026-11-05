@@ -19,8 +19,8 @@ export function parsePlayerMessage(
     throw new Error('Player identity mismatch');
   return value;
 }
-export function loadLessonScript(lesson: unknown, revision: number): string {
-  const data = JSON.stringify({ type: 'load_lesson', lesson, revision })
+export function loadLessonScript(lesson: unknown, revision: number, savesProgress = false): string {
+  const data = JSON.stringify({ type: 'load_lesson', lesson, revision, savesProgress })
     .replaceAll('<', '\\u003c')
     .replaceAll('\u2028', '\\u2028')
     .replaceAll('\u2029', '\\u2029');

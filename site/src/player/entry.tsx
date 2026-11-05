@@ -28,7 +28,14 @@ function load(event: MessageEvent) {
       return;
     assertLesson(data.lesson);
     loaded = true;
-    root.render(<Player lesson={data.lesson} revision={Number(data.revision)} onEvent={emit} />);
+    root.render(
+      <Player
+        lesson={data.lesson}
+        revision={Number(data.revision)}
+        onEvent={emit}
+        savesProgress={(data as { savesProgress?: unknown }).savesProgress === true}
+      />,
+    );
   } catch {
     root.render(<p role="alert">Unable to load this lesson.</p>);
   }

@@ -251,7 +251,7 @@ function ParentPreview() {
         <LessonPreview
           lesson={opened.lesson}
           revision={opened.revision}
-          {...(childMode ? { onEvent: recordEvent } : {})}
+          {...(childMode ? { onEvent: recordEvent, savesProgress: true } : {})}
         />
       </SafeAreaView>
     );

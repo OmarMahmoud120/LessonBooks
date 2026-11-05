@@ -16,8 +16,15 @@ export type PlayerProps = {
   revision?: number;
   onEvent?: (event: LessonEvent) => void;
   assets?: Record<string, string>;
+  savesProgress?: boolean;
 };
-export function Player({ lesson, revision = 1, onEvent, assets = {} }: PlayerProps) {
+export function Player({
+  lesson,
+  revision = 1,
+  onEvent,
+  assets = {},
+  savesProgress = false,
+}: PlayerProps) {
   const [index, setIndex] = useState(0);
   const [answer, setAnswer] = useState<unknown>({});
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | 'hint' | null>(null);
@@ -92,7 +99,7 @@ export function Player({ lesson, revision = 1, onEvent, assets = {} }: PlayerPro
       <header className="lesson-header">
         <span className="eyebrow">{t.preview}</span>
         <h1>{text(lesson.metadata.title)}</h1>
-        <p>{t.noProgress}</p>
+        <p>{savesProgress ? t.progressSaved : t.noProgress}</p>
         <progress
           aria-label={text(lesson.metadata.title)}
           value={completed ? items.length : index}

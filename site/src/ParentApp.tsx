@@ -292,7 +292,7 @@ export function ParentApp() {
           key={`${opened.lesson.id}-${opened.revision}`}
           lesson={opened.lesson}
           revision={opened.revision}
-          {...(kidView ? { onEvent: recordEvent } : {})}
+          {...(kidView ? { onEvent: recordEvent, savesProgress: true } : {})}
         />
       </div>
     );
