@@ -60,6 +60,7 @@ export function ParentApp() {
     () => sessionStorage.getItem('lessonbooks-parent-unlocked') === '1',
   );
   const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
   const [pinFormOpen, setPinFormOpen] = useState(false);
   const [kidView, setKidView] = useState(false);
   const [consented, setConsented] = useState(false);
@@ -245,23 +246,35 @@ export function ParentApp() {
     sessionStorage.setItem('lessonbooks-parent-unlocked', '1');
   }
   async function submitPin() {
-    await perform(async () => {
+    setBusy(true);
+    setPinError('');
+    try {
       await api('/parent/pin/verify', {
         method: 'POST',
         body: JSON.stringify({ pin: pinInput }),
       });
       setPinInput('');
       unlockParentArea();
-    });
+    } catch (error) {
+      setPinError((error as { status?: number }).status === 429 ? t.pinLocked : t.pinWrong);
+    } finally {
+      setBusy(false);
+    }
   }
   async function savePin() {
-    await perform(async () => {
+    setBusy(true);
+    setPinError('');
+    try {
       await api('/parent/pin', { method: 'POST', body: JSON.stringify({ pin: pinInput }) });
       setPinInput('');
       setPinFormOpen(false);
       setPinSet(true);
       unlockParentArea();
-    });
+    } catch (error) {
+      setPinError((error as { status?: number }).status === 429 ? t.pinLocked : t.pinWrong);
+    } finally {
+      setBusy(false);
+    }
   }
   if (opened && user && opened.owner_uid === user.uid)
     return (
@@ -520,6 +533,11 @@ export function ParentApp() {
                     autoComplete="off"
                   />
                 </label>
+                {pinError && (
+                  <p role="alert" className="small">
+                    {pinError}
+                  </p>
+                )}
                 <button className="primary" disabled={busy}>
                   {t.pinEnter}
                 </button>
