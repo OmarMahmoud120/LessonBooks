@@ -90,6 +90,11 @@ function ParentPreview() {
     error: string | null;
   } | null>(null);
   const [uploadAsset, setUploadAsset] = useState<{ uri: string; name: string } | null>(null);
+  const [pinSet, setPinSet] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [pinFormOpen, setPinFormOpen] = useState(false);
   const [uploadKey, setUploadKey] = useState('');
   const [busy, setBusy] = useState(false);
   async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -105,7 +110,11 @@ function ParentPreview() {
         ...init.headers,
       },
     });
-    if (!response.ok) throw new Error('request_failed');
+    if (!response.ok) {
+      const failure = new Error('request_failed') as Error & { status?: number };
+      failure.status = response.status;
+      throw failure;
+    }
     return response.json() as Promise<T>;
   }
   async function refresh() {
@@ -113,8 +122,10 @@ function ParentPreview() {
     const family = await api<{
       kids: { id: string; nickname: string }[];
       consents: { type: string }[];
+      pin_set: boolean;
     }>('/family');
     if (!owner || owner !== auth.currentUser?.uid) return;
+    setPinSet(family.pin_set);
     setKidsList(family.kids);
     setKid((current) => family.kids.find((k) => k.id === current?.id) ?? family.kids[0] ?? null);
     setConsent(
@@ -147,6 +158,10 @@ function ParentPreview() {
     setJobView(null);
     setUploadAsset(null);
     setUploadKey('');
+    setUnlocked(false);
+    setPinInput('');
+    setPinError('');
+    setPinFormOpen(false);
   }
   useEffect(() => {
     void uploadCopies.cleanup().catch(() => setStatus(t.error));
@@ -171,11 +186,14 @@ function ParentPreview() {
   useEffect(() => {
     if (!user) return;
     void refresh().catch(() => setStatus(t.error));
+    // The periodic refresh re-renders the dashboard and breaks controlled text input
+    // mid-typing; pause it while a form is open.
+    if (pinFormOpen) return;
     const timer = setInterval(() => {
       void refresh().catch(() => {});
     }, 3000);
     return () => clearInterval(timer);
-  }, [user]);
+  }, [user, pinFormOpen]);
   useEffect(() => {
     if (!jobId || !user || ['completed', 'failed', 'cancelled'].includes(jobView?.status ?? ''))
       return;
@@ -194,6 +212,37 @@ function ParentPreview() {
     }, 2000);
     return () => clearInterval(timer);
   }, [jobId, jobView?.status, user]);
+  async function submitPin() {
+    setBusy(true);
+    setPinError('');
+    try {
+      await api('/parent/pin/verify', {
+        method: 'POST',
+        body: JSON.stringify({ pin: pinInput }),
+      });
+      setPinInput('');
+      setUnlocked(true);
+    } catch (error) {
+      setPinError((error as { status?: number }).status === 429 ? t.pinLocked : t.pinWrong);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function savePin() {
+    setBusy(true);
+    setPinError('');
+    try {
+      await api('/parent/pin', { method: 'POST', body: JSON.stringify({ pin: pinInput }) });
+      setPinInput('');
+      setPinFormOpen(false);
+      setPinSet(true);
+      setUnlocked(true);
+    } catch (error) {
+      setPinError((error as { status?: number }).status === 429 ? t.pinLocked : t.pinWrong);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function runUpload(asset: { uri: string; name: string }, key: string, kidId: string) {
     const data = new FormData();
     data.append('book', {
@@ -349,6 +398,27 @@ function ParentPreview() {
                   }
                 />
               </>
+            ) : pinSet && !unlocked && !childMode ? (
+              <>
+                <Text style={styles.heading}>{t.pinGateTitle}</Text>
+                <Text>{t.pinGatePrompt}</Text>
+                <TextInput
+                  style={styles.input}
+                  accessibilityLabel={t.pinGatePrompt}
+                  secureTextEntry
+                  keyboardType="number-pad"
+                  maxLength={8}
+                  value={pinInput}
+                  onChangeText={setPinInput}
+                />
+                {pinError ? <Text accessibilityLiveRegion="assertive">{pinError}</Text> : null}
+                <Button
+                  title={t.pinEnter}
+                  disabled={busy || pinInput.length < 4}
+                  onPress={() => void submitPin()}
+                />
+                {kid && <Button title={t.kidPlay} onPress={() => setChildMode(true)} />}
+              </>
             ) : !kid || profileMode ? (
               <>
                 <Text style={styles.heading}>{t.childTitle}</Text>
@@ -448,6 +518,7 @@ function ParentPreview() {
                   onPress={() => {
                     setChildMode(false);
                     setStatus('');
+                    if (pinSet) setUnlocked(false);
                   }}
                 />
               </>
@@ -474,6 +545,31 @@ function ParentPreview() {
                   </View>
                 )}
                 <Button title={t.kidPlay} onPress={() => setChildMode(true)} />
+                {pinFormOpen ? (
+                  <>
+                    <Text>{pinSet ? t.pinChange : t.pinChoose}</Text>
+                    <TextInput
+                      style={styles.input}
+                      accessibilityLabel={t.pinSave}
+                      secureTextEntry
+                      onChangeText={setPinInput}
+                    />
+                    <Button
+                      title={t.pinSave}
+                      disabled={busy || pinInput.length < 4}
+                      onPress={() => void savePin()}
+                    />
+                  </>
+                ) : (
+                  <Button
+                    title={pinSet ? t.pinChangeAction : t.pinSetAction}
+                    onPress={() => {
+                      setPinInput('');
+                      setPinError('');
+                      setPinFormOpen(true);
+                    }}
+                  />
+                )}
                 <Text>{t.uploadHelp}</Text>
                 <Button
                   title={t.choosePDF}

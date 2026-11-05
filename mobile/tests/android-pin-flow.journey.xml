@@ -1,0 +1,22 @@
+<journey name="Phase 2 mobile PIN gate — parent to child with lock">
+<description>
+Verifies the mobile PIN flow end to end with synthetic content: the parent
+sets a PIN and assigns an approved lesson, the child plays and completes it
+in child mode, returning to parent tools requires the PIN, a wrong PIN is
+rejected, and after a full app restart the gate re-arms and saved progress
+is still visible to the unlocked parent.
+</description>
+<actions>
+<action>Sign up with android-pin@example.test and SyntheticJourney2026 and grant both consents through the dialog</action>
+<action>Create profile FoxOne and verify the library screen appears</action>
+<action>Upload counting.pdf from Downloads and wait for three draft lessons</action>
+<action>Open the first draft, approve it, go back, and assign it</action>
+<action>Tap Set parent PIN, enter 2468, save, and verify the parent tools stay unlocked</action>
+<action>Tap Child play, open the assigned lesson, complete all five activities, and verify the completion card shows 20 of 20</action>
+<action>Exit child play and verify the PIN gate appears instead of parent tools</action>
+<action>Enter the wrong PIN 1111 and verify the wrong-PIN message appears</action>
+<action>Enter the correct PIN 2468 and verify the parent dashboard with the progress card showing the completed lesson</action>
+<action>Force-stop and relaunch the app, sign in again, and verify the PIN gate re-arms after sign-in</action>
+<action>Enter the correct PIN 2468 and verify the progress card still shows the completed lesson</action>
+</actions>
+</journey>
