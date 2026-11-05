@@ -164,6 +164,7 @@ function ParentPreview() {
         setProfileMode(false);
         setChildMode(false);
         setNickname('');
+        setStatus('');
       }),
     [],
   );

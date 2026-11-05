@@ -37,8 +37,11 @@ decision on sending book images to a processor).
 Tesseract Arabic remains the weakest local tier: vocalized/diacritized children's
 text keeps a high character error rate, so tier 1 is a plumbing and fallback layer,
 not the quality ceiling. The binary-tampering surface grows by two pinned model files.
-Page images duplicate book content inside the same family storage scope; they inherit
-existing family deletion and are bounded by the page limit. The
+Page images duplicate book content inside the same family storage scope; they are
+written under the per-attempt, fence-scoped job directory, so failure cleanup and the
+finalize-time family-activity recheck close the deletion race (a concurrent kid or
+account deletion can never leave orphaned page images), and they remain bounded by
+the page limit. The
 `unsupported_source_language` failure remains permanent and now triggers only for
 languages outside the supported profile set. Interfaces gained a language parameter
 and an image sink, keeping mocked tests independent of native binaries.

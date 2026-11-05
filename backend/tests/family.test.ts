@@ -388,6 +388,38 @@ describe('family boundaries and generation', () => {
     });
     await expect(family.retryJob('alice', job_id)).rejects.toThrow('retry_limit_reached');
   });
+  it('writes page images into the attempt directory so failure cleanup removes them', async () => {
+    const { family, kid, repo, assets } = await setup();
+    const { job_id } = await family.upload(
+      'alice',
+      kid.id,
+      Buffer.from('%PDF-1.7 synthetic'),
+      'attempt-pages-key-0001',
+    );
+    const seen: string[] = [];
+    const pipeline = new Pipeline(
+      family,
+      {
+        extract: async (
+          _bytes: Uint8Array,
+          _language?: string,
+          sink?: (page: number, bytes: Uint8Array) => Promise<string>,
+        ) => {
+          const assetId = await sink!(1, new Uint8Array([1, 2, 3]));
+          seen.push(assetId);
+          throw new Error('ocr failed after persisting pages');
+        },
+      },
+      new RoutedAI(new MockModelClient(), mockPolicy),
+    );
+    await pipeline.run('alice', job_id);
+    expect(seen[0]).toContain(`/jobs/${job_id}/`);
+    expect(seen[0]).toContain('/pages/page-1.png');
+    // The same-attempt failure deletes the whole attempt prefix, page image included.
+    const job = await repo.get<Job>(familyPath('alice', 'generation_jobs', job_id));
+    expect(job?.status).toBe('queued');
+    await expect(assets.get(seen[0]!)).rejects.toThrow('asset_not_found');
+  });
   it('deletion wins over a worker that is still extracting content', async () => {
     const { family, kid, repo, assets } = await setup();
     const { job_id } = await family.upload(

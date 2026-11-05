@@ -113,6 +113,14 @@ export function ParentApp() {
         setKidView(false);
         setPinFormOpen(false);
         setPinInput('');
+        setAssignments([]);
+        setProgress(null);
+        setSelectedKidId(null);
+        setAddingKid(false);
+        setFile(null);
+        setUploadKey('');
+        setError('');
+        setNickname('');
       }),
     [],
   );
@@ -430,7 +438,10 @@ export function ParentApp() {
                     <button
                       key={kid.id}
                       aria-pressed={kid.id === selectedKid.id}
-                      onClick={() => setSelectedKidId(kid.id)}
+                      onClick={() => {
+                        setSelectedKidId(kid.id);
+                        void refresh().catch(() => setError(t.error));
+                      }}
                     >
                       {kid.nickname}
                     </button>
@@ -588,7 +599,12 @@ export function ParentApp() {
                     <button
                       key={kid.id}
                       aria-pressed={kid.id === selectedKid?.id}
-                      onClick={() => setSelectedKidId(kid.id)}
+                      onClick={() => {
+                        setSelectedKidId(kid.id);
+                        setJob(null);
+                        setError('');
+                        void refresh().catch(() => setError(t.error));
+                      }}
                     >
                       {kid.nickname}
                     </button>

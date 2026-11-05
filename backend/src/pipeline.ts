@@ -116,6 +116,9 @@ export class Pipeline {
           ) as StageState)
         : {};
       const account = this.accounting(uid, job);
+      // Attempt-scoped storage: everything an attempt writes lives under this fence-scoped
+      // directory, so failure cleanup and concurrent kid deletion cannot leave orphans.
+      attemptPath = `families/${uid}/kids/${job.kid_id}/jobs/${job.id}/${job.fence}-${randomUUID()}/`;
       await stageFunctions[job.stage]({
         state,
         job,
@@ -141,8 +144,8 @@ export class Pipeline {
             tx.put(path, { ...current, hosted_ocr_attempted: true });
           }),
         ai: this.ai,
+        attemptPath,
       });
-      attemptPath = `families/${uid}/kids/${job.kid_id}/jobs/${job.id}/${job.fence}-${randomUUID()}/`;
       const outputPath = attemptPath + 'state.json';
       await family.assets.put(outputPath, Buffer.from(JSON.stringify(state)), 'application/json');
       const published: LessonRecord[] = [];

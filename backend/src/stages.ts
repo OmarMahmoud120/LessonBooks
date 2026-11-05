@@ -14,6 +14,7 @@ export type StageInput = {
   ingestor: Ingestor;
   beforeHostedOCR?: BeforeHostedOCR;
   ai: RoutedAI;
+  attemptPath: string;
 };
 export type StageOutput = StageState;
 const objectSchema = (properties: object) => ({
@@ -53,11 +54,13 @@ const safetySchema = objectSchema(
 );
 
 export async function ingest(input: StageInput): Promise<StageOutput> {
-  const { state, book, family, ingestor, kid } = input;
+  const { state, book, family, ingestor, kid, attemptPath } = input;
   // Rasterized pages stay inside the isolated worker temp dir until the sink persists them
-  // beside the book source, where family scoping and deletion already apply.
+  // under this attempt's fence-scoped directory: failure cleanup deletes the whole attempt
+  // prefix, and finalize re-checks family activity, so a concurrent deletion cannot leave
+  // orphaned page images behind.
   const sink: ImageSink | undefined = async (page, bytes) => {
-    const assetId = `${book.source_path.replace(/\/source\.pdf$/, '')}/pages/page-${page}.png`;
+    const assetId = `${attemptPath}pages/page-${page}.png`;
     await family.assets.put(assetId, bytes, 'image/png');
     return assetId;
   };
