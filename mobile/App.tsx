@@ -42,6 +42,18 @@ type Summary = {
   revision: number;
   status: string;
 };
+type Assignment = { id: string; kid_id: string; lesson_id: string; revision: number };
+type KidProgress = {
+  kid_id: string;
+  lessons: {
+    lesson_id: string;
+    started: number;
+    completed: number;
+    score: number;
+    max_score: number;
+    last_client_at: string;
+  }[];
+};
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -58,8 +70,12 @@ function ParentPreview() {
   const [nickname, setNickname] = useState('');
   const [kid, setKid] = useState<{ id: string; nickname: string } | null>(null);
   const [kidsList, setKidsList] = useState<{ id: string; nickname: string }[]>([]);
+  const [profileMode, setProfileMode] = useState(false);
+  const [childMode, setChildMode] = useState(false);
   const [consent, setConsent] = useState(false);
   const [lessons, setLessons] = useState<Summary[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [progress, setProgress] = useState<KidProgress | null>(null);
   const [opened, setOpened] = useState<{
     lesson: Lesson;
     revision: number;
@@ -97,7 +113,14 @@ function ParentPreview() {
       ['privacy', 'content_rights'].every((type) => family.consents.some((c) => c.type === type)),
     );
     const summaries = await api<Summary[]>('/lessons');
-    if (owner === auth.currentUser?.uid) setLessons(summaries);
+    if (owner !== auth.currentUser?.uid) return;
+    setLessons(summaries);
+    const list = await api<Assignment[]>('/assignments');
+    if (owner !== auth.currentUser?.uid) return;
+    setAssignments(list);
+    const selected = family.kids.find((k) => k.id === kid?.id) ?? family.kids[0];
+    if (selected) setProgress(await api(`/kids/${selected.id}/progress`));
+    else setProgress(null);
   }
   async function perform(action: () => Promise<unknown>) {
     setBusy(true);
@@ -109,6 +132,10 @@ function ParentPreview() {
       setBusy(false);
     }
   }
+  function clearTransient() {
+    setStatus('');
+    setOpened(null);
+  }
   useEffect(() => {
     void uploadCopies.cleanup().catch(() => setStatus(t.error));
   }, []);
@@ -116,9 +143,15 @@ function ParentPreview() {
     () =>
       onAuthStateChanged(auth, (current) => {
         setUser(current);
-        setOpened(null);
+        clearTransient();
         setKid(null);
+        setKidsList([]);
         setLessons([]);
+        setAssignments([]);
+        setProgress(null);
+        setProfileMode(false);
+        setChildMode(false);
+        setNickname('');
       }),
     [],
   );
@@ -130,39 +163,52 @@ function ParentPreview() {
     }, 3000);
     return () => clearInterval(timer);
   }, [user]);
+  function recordEvent(
+    event: Parameters<NonNullable<Parameters<typeof LessonPreview>[0]['onEvent']>>[0],
+  ) {
+    void perform(async () => {
+      await api('/events', {
+        method: 'POST',
+        body: JSON.stringify({ events: [event] }),
+      });
+    });
+  }
   if (opened && user && opened.owner_uid === user.uid)
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.controls}>
-          <Button title={t.back} onPress={() => setOpened(null)} />
           <Button
-            title={opened.status === 'approved' ? t.approved : t.approve}
-            disabled={busy || opened.status === 'approved'}
-            onPress={() =>
-              void perform(async () => {
-                await api(`/lessons/${opened.lesson.id}/approve`, {
-                  method: 'POST',
-                  body: JSON.stringify({ revision: opened.revision }),
-                });
-                setOpened({ ...opened, status: 'approved' });
-              })
-            }
+            title={t.back}
+            onPress={() => {
+              setOpened(null);
+              setStatus('');
+              void refresh().catch(() => {});
+            }}
           />
+          {!childMode && (
+            <Button
+              title={opened.status === 'approved' ? t.approved : t.approve}
+              disabled={busy || opened.status === 'approved'}
+              onPress={() =>
+                void perform(async () => {
+                  await api(`/lessons/${opened.lesson.id}/approve`, {
+                    method: 'POST',
+                    body: JSON.stringify({ revision: opened.revision }),
+                  });
+                  setOpened({ ...opened, status: 'approved' });
+                })
+              }
+            />
+          )}
         </View>
         <LessonPreview
           lesson={opened.lesson}
           revision={opened.revision}
-          onEvent={(event) =>
-            void perform(async () => {
-              await api('/events', {
-                method: 'POST',
-                body: JSON.stringify({ events: [event] }),
-              });
-            })
-          }
+          {...(childMode ? { onEvent: recordEvent } : {})}
         />
       </SafeAreaView>
     );
+  const kidAssignments = assignments.filter((a) => a.kid_id === kid?.id);
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -204,7 +250,13 @@ function ParentPreview() {
           </>
         ) : (
           <>
-            <Button title={t.signOut} onPress={() => void signOut(auth)} />
+            <Button
+              title={t.signOut}
+              onPress={() => {
+                clearTransient();
+                void signOut(auth);
+              }}
+            />
             {!consent ? (
               <>
                 <Text style={styles.heading}>{t.consentTitle}</Text>
@@ -237,7 +289,7 @@ function ParentPreview() {
                   }
                 />
               </>
-            ) : !kid ? (
+            ) : !kid || profileMode ? (
               <>
                 <Text style={styles.heading}>{t.childTitle}</Text>
                 <Text>{t.nicknameHelp}</Text>
@@ -255,7 +307,7 @@ function ParentPreview() {
                     disabled={busy || !nickname}
                     onPress={() =>
                       void perform(async () => {
-                        await api('/kids', {
+                        const created = await api<{ id: string }>('/kids', {
                           method: 'POST',
                           body: JSON.stringify({
                             nickname,
@@ -268,11 +320,76 @@ function ParentPreview() {
                             reading_level: 'emerging',
                           }),
                         });
+                        setNickname('');
+                        setProfileMode(false);
+                        setKid({ id: created.id, nickname });
                         await refresh();
                       })
                     }
                   />
                 ))}
+                {profileMode && <Button title={t.back} onPress={() => setProfileMode(false)} />}
+              </>
+            ) : childMode ? (
+              <>
+                <Text style={styles.heading}>{kid.nickname}</Text>
+                {kidsList.length > 1 && (
+                  <View
+                    style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
+                    accessibilityLabel={t.children}
+                  >
+                    {kidsList.map((candidate) => (
+                      <Button
+                        key={candidate.id}
+                        title={
+                          candidate.id === kid.id ? `• ${candidate.nickname}` : candidate.nickname
+                        }
+                        onPress={() => {
+                          setKid(candidate);
+                          setStatus('');
+                        }}
+                      />
+                    ))}
+                  </View>
+                )}
+                <Text>{t.kidPlayHelp}</Text>
+                {(() => {
+                  const approved = lessons.filter(
+                    (lesson) => lesson.kid_id === kid.id && lesson.status === 'approved',
+                  );
+                  const assigned = approved.filter((lesson) =>
+                    kidAssignments.some((a) => a.lesson_id === lesson.id),
+                  );
+                  const rest = approved.filter((lesson) => !assigned.includes(lesson));
+                  return [...assigned, ...rest].map((lesson) => (
+                    <View key={lesson.id} style={styles.card}>
+                      <Text style={styles.heading}>{lesson.summary}</Text>
+                      <Text>{assigned.includes(lesson) ? t.assignedLabel : t.approved}</Text>
+                      <Button
+                        title={t.open}
+                        onPress={() =>
+                          void perform(async () => {
+                            const value = await api<{
+                              lesson: unknown;
+                              revision: number;
+                              status: string;
+                            }>(`/lessons/${lesson.id}`);
+                            assertLesson(value.lesson);
+                            if (auth.currentUser?.uid === user?.uid && user)
+                              setOpened({ ...value, lesson: value.lesson, owner_uid: user.uid });
+                          })
+                        }
+                      />
+                    </View>
+                  ));
+                })()}
+                <Button
+                  title={t.kidPlayExit}
+                  onPress={() => {
+                    setChildMode(false);
+                    setStatus('');
+                  }}
+                />
               </>
             ) : (
               <>
@@ -288,11 +405,15 @@ function ParentPreview() {
                         title={
                           candidate.id === kid.id ? `• ${candidate.nickname}` : candidate.nickname
                         }
-                        onPress={() => setKid(candidate)}
+                        onPress={() => {
+                          setKid(candidate);
+                          setStatus('');
+                        }}
                       />
                     ))}
                   </View>
                 )}
+                <Button title={t.kidPlay} onPress={() => setChildMode(true)} />
                 <Text>{t.uploadHelp}</Text>
                 <Button
                   title={t.choosePDF}
@@ -327,31 +448,83 @@ function ParentPreview() {
                     )
                   }
                 />
+                <Button title={`${t.addChild} +`} onPress={() => setProfileMode(true)} />
+                {progress && progress.lessons.length > 0 && (
+                  <View style={styles.card}>
+                    <Text style={styles.heading}>{t.progressTitle}</Text>
+                    {progress.lessons.map((entry) => {
+                      const lesson = lessons.find((item) => item.id === entry.lesson_id);
+                      return (
+                        <Text key={entry.lesson_id}>
+                          {lesson?.summary ?? entry.lesson_id} —{' '}
+                          {t.completedCount.replace('{count}', String(entry.completed))} ·{' '}
+                          {Math.round((entry.score / Math.max(entry.max_score, 1)) * 100)}%
+                        </Text>
+                      );
+                    })}
+                  </View>
+                )}
                 {lessons
                   .filter((lesson) => lesson.kid_id === kid?.id)
-                  .map((lesson) => (
-                    <View key={lesson.id} style={styles.card}>
-                      <Text style={styles.heading}>{lesson.summary}</Text>
-                      <Text>{lesson.status === 'approved' ? t.approved : t.draft}</Text>
-                      <Button
-                        title={t.open}
-                        onPress={() =>
-                          void perform(async () => {
-                            const value = await api<{
-                              lesson: unknown;
-                              revision: number;
-                              status: string;
-                            }>(`/lessons/${lesson.id}`);
-                            assertLesson(value.lesson);
-                            if (auth.currentUser?.uid === user?.uid && user)
-                              setOpened({ ...value, lesson: value.lesson, owner_uid: user.uid });
-                          })
-                        }
-                      />
-                    </View>
-                  ))}
+                  .map((lesson) => {
+                    const assignment = kidAssignments.find((a) => a.lesson_id === lesson.id);
+                    return (
+                      <View key={lesson.id} style={styles.card}>
+                        <Text style={styles.heading}>{lesson.summary}</Text>
+                        <Text>
+                          {assignment
+                            ? t.assignedLabel
+                            : lesson.status === 'approved'
+                              ? t.approved
+                              : t.draft}
+                        </Text>
+                        <Button
+                          title={t.open}
+                          onPress={() =>
+                            void perform(async () => {
+                              const value = await api<{
+                                lesson: unknown;
+                                revision: number;
+                                status: string;
+                              }>(`/lessons/${lesson.id}`);
+                              assertLesson(value.lesson);
+                              if (auth.currentUser?.uid === user?.uid && user)
+                                setOpened({ ...value, lesson: value.lesson, owner_uid: user.uid });
+                            })
+                          }
+                        />
+                        {lesson.status === 'approved' &&
+                          (assignment ? (
+                            <Button
+                              title={t.unassign}
+                              disabled={busy}
+                              onPress={() =>
+                                void perform(async () => {
+                                  await api(`/assignments/${assignment.id}`, { method: 'DELETE' });
+                                  await refresh();
+                                })
+                              }
+                            />
+                          ) : (
+                            <Button
+                              title={t.assign}
+                              disabled={busy}
+                              onPress={() =>
+                                void perform(async () => {
+                                  await api('/assignments', {
+                                    method: 'POST',
+                                    body: JSON.stringify({ kid_id: kid.id, lesson_id: lesson.id }),
+                                  });
+                                  await refresh();
+                                })
+                              }
+                            />
+                          ))}
+                      </View>
+                    );
+                  })}
                 <Button
-                  title={t.deleteChild}
+                  title={t.deleteChild.replace('{name}', kid.nickname)}
                   disabled={busy}
                   onPress={() =>
                     Alert.alert(t.deleteConfirm, '', [
@@ -362,6 +535,7 @@ function ParentPreview() {
                         onPress: () =>
                           void perform(async () => {
                             await api(`/kids/${kid.id}`, { method: 'DELETE' });
+                            setProgress(null);
                             await refresh();
                           }),
                       },

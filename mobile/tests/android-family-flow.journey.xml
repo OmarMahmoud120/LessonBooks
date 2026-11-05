@@ -1,0 +1,27 @@
+<journey name="Phase 2 family flow — parent to child">
+<description>
+Automated Android journey for the complete family flow: sign up, consent,
+create two profiles, upload an owned PDF, review generated drafts, approve,
+assign to a child, enter child mode, finish a lesson in the WebView, and view
+recorded progress. Uses a synthetic parent account and owned fixtures only.
+</description>
+<actions>
+<action>Verify the LessonBooks sign-in screen shows email and password fields and a create account button</action>
+<action>Enter android-family@example.test in the email field and SyntheticJourney2026 in the password field</action>
+<action>Tap CREATE ACCOUNT and verify the consent screen appears</action>
+<action>Tap SAVE CHOICES and confirm the system dialog to grant both consents</action>
+<action>Verify the profile creation screen "Who is learning?" appears</action>
+<action>Type FoxOne into the Nickname field and tap CREATE PROFILE · YEAR 1</action>
+<action>Verify the library screen for FoxOne with an upload button appears</action>
+<action>Tap the choose PDF button, select counting.pdf from Downloads, and verify the generating status appears</action>
+<action>Wait until three draft lessons for FoxOne appear in the list</action>
+<action>Open the first draft lesson and verify the player renders, then go back</action>
+<action>Tap APPROVE on the opened draft and verify it shows as approved, then go back</action>
+<action>Tap the assign button on the approved lesson and verify it changes to unassign</action>
+<action>Tap Add another profile, type OwlTwo in the nickname field and create the second profile</action>
+<action>Switch to FoxOne with the child switcher and verify FoxOne's lessons are listed</action>
+<action>Tap Child play and verify the child play view lists the assigned lesson first</action>
+<action>Open the assigned lesson and complete all five activities in the WebView until the completion card with a score appears</action>
+<action>Go back, exit child play, and verify the parent dashboard shows a progress card with at least one completed lesson</action>
+</actions>
+</journey>
