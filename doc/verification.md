@@ -89,3 +89,55 @@ noise, the image-only PDF returns no text, and the image request returns an Engl
 description rather than a transcription (letter CER 8.37). The provider was not
 adopted for ingestion; details and limits are in
 [the evaluation report](cloudflare-markdown-test.md).
+
+## Cloudflare integration review — 2026-11-05
+
+The OCR adapter branch consolidates the Markdown and direct-vision experiment
+histories, preserving their original reports and mocked tests. The Markdown scorer
+now removes only the exact known converter headings; the original English CER
+remains in the raw evidence, with the corrected zero score explained in the report.
+Its CLI exclusively claims output before credentials or transport, rejecting
+existing and interrupted batches instead of overwriting evidence or repeating spend.
+The original vision harness remains for reproducibility; the bounded OCR runner is
+the supported path for any separately approved future evaluation.
+
+Security, privacy, schema and documentation review roles were applied to the
+integration diff by the implementing agent. This is a self-review, not independent
+reviewer coverage. The reviewed boundary is synthetic evaluation: the server still
+constructs local Tesseract, hosted OCR selection fails startup, and the new runner
+checks the owned fixture's hash. No family identifiers enter its request, no client
+model integration was added, and errors omit upstream bodies and credentials.
+The lesson/event contracts are unchanged. Hosted output remains untrusted text;
+mocked tests do not prove extraction quality, consent adequacy or residency.
+
+No new paid call, family-data processing, push or deployment is part of this merge.
+The original direct-vision result covers one short page only. The broader corpus,
+persisted spend enforcement and processor decisions remain open. Supported Node
+
+> =24 execution also remains unverified on this host (Node 23.7.0); passing host
+> checks must not be described as supported-engine verification.
+
+Pre-existing launch issues remain outside this evaluation-only merge:
+
+- The image sink in backend/src/stages.ts writes page images beside the source
+  before the stage's fenced commit; backend/src/pipeline.ts assigns its cleanup
+  attempt prefix only after ingestion. Stale OCR writes can recreate images after
+  deletion and need a fenced asset lifecycle before family use.
+- The server gives the real Cloud Tasks publisher only to the periodic sweeper;
+  fresh FamilyService/Pipeline dispatch still uses default publishers.
+- The worker needs its Google OIDC certificate source corrected and validated
+  with genuine worker identity tokens before cloud delivery claims.
+- The Cloud Run worker template lacks queue and worker identity settings required
+  by runtime configuration. The template alone is not deployable evidence.
+
+The production/deployment gates remain closed. Existing synthetic unit coverage
+must not be used to dismiss those launch issues.
+
+Full integration verification passed: npm run check completed successfully with
+21 Node tests (8 agent-policy and 13 evaluator tests), 151 unit tests, all eight
+browser tests and three emulator tests, plus lint, types, contracts/adapters,
+fixtures, mocked evaluation and builds. Only this isolated worktree's temporary
+emulator bindings changed to 19099/18080/19199 (hub 14400, logging 14500) during the
+run; the tracked firebase.json was restored byte-for-byte afterward. The existing
+development emulator stack was not stopped or reconfigured. All verification was
+synthetic/mocked, and no new paid request ran.

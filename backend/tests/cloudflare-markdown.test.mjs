@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { convert, characterErrorRate, normalize, cases } from '../eval/cloudflare-markdown.mjs';
+import {
+  convert,
+  main,
+  characterErrorRate,
+  scoringText,
+  normalize,
+  cases,
+} from '../eval/cloudflare-markdown.mjs';
 const input = {
   account: '0'.repeat(32),
   key: 'synthetic-token',
@@ -88,4 +95,22 @@ test('scores missing output and diacritics without confusing format changes with
   assert.equal(normalize('عَـدَدٌ'), normalize('عدد'));
   assert.notEqual(normalize('عَـدَدٌ', true), normalize('عدد', true));
   assert.equal(cases.length, 4);
+});
+
+test('excludes known converter boilerplate from transcription scoring only', () => {
+  const raw = '# owned.pdf\n## Contents\n### Page 1\nOne and one make two.\n';
+  assert.equal(scoringText(raw, 'owned.pdf'), 'One and one make two.\n');
+  assert.equal(scoringText(raw, 'different.pdf'), raw);
+});
+
+test('refuses a repeated live batch before credentials or network access', async () => {
+  let calls = 0;
+  await assert.rejects(
+    main(['--live'], async () => {
+      calls++;
+      throw new Error('no live transport');
+    }),
+    { code: 'EEXIST' },
+  );
+  assert.equal(calls, 0);
 });

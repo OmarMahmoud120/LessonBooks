@@ -1,5 +1,6 @@
-import { readFile, writeFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
+import { readFile, open } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { realpathSync } from 'node:fs';
 import { SENTENCES_VOCALIZED } from './ocr-eval-generate.mjs';
 
 export const cases = [
@@ -20,6 +21,10 @@ export function normalize(text, diacritics = false) {
   let value = text.normalize('NFKC').replace(/\u0640/g, '');
   if (!diacritics) value = value.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '');
   return value.replace(diacritics ? /[^\p{L}\p{N}\u064B-\u065F\u0670]/gu : /[^\p{L}\p{N}]/gu, '');
+}
+export function scoringText(text, file) {
+  const wrapper = `# ${file}\n## Contents\n### Page 1\n`;
+  return text.startsWith(wrapper) ? text.slice(wrapper.length) : text;
 }
 export function characterErrorRate(reference, hypothesis) {
   const expected = Array.from(reference);
@@ -102,14 +107,15 @@ export async function convert({ account, key, file, bytes, mime, request = fetch
     return { ...base, status: 'invalid_response', stop: true };
   }
 }
-async function main() {
+export async function main(args = process.argv.slice(2), request = fetch) {
+  if (args.some((arg) => arg !== '--live')) throw new Error('unsupported_argument');
   const fixtures = await Promise.all(
     cases.map(async (item) => ({
       ...item,
-      bytes: await readFile(`doc/fixtures/books/${item.file}`),
+      bytes: await readFile(new URL(`../../doc/fixtures/books/${item.file}`, import.meta.url)),
     })),
   );
-  if (!process.argv.includes('--live')) {
+  if (!args.includes('--live')) {
     console.log(
       JSON.stringify(
         { mode: 'dry-run', maximum_requests: 4, files: cases.map(({ file }) => file) },
@@ -119,44 +125,57 @@ async function main() {
     );
     return;
   }
-  const account = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const key = process.env.CLOUDFLARE_API_KEY;
-  if (!account || !/^[a-f0-9]{32}$/i.test(account) || !key?.trim())
-    throw new Error('cloudflare_credentials_missing_or_invalid');
-  const results = [];
-  for (const item of fixtures) {
-    const result = await convert({ account, key, ...item });
-    // Defensive redaction applies even to unexpected provider text that echoes credentials.
-    if (result.text)
-      result.text = result.text.split(key).join('[redacted]').split(account).join('[redacted]');
-    if (result.status === 'ok' && item.reference) {
-      result.letter_cer = characterErrorRate(normalize(item.reference), normalize(result.text));
-      result.diacritic_cer = characterErrorRate(
-        normalize(item.reference, true),
-        normalize(result.text, true),
+  // Reserve output before transport; existing or interrupted batches cannot repeat spend.
+  const handle = await open(
+    new URL('../../doc/evidence/cloudflare-markdown.json', import.meta.url),
+    'wx',
+    0o600,
+  );
+  try {
+    const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const key = process.env.CLOUDFLARE_API_KEY;
+    if (!account || !/^[a-f0-9]{32}$/i.test(account) || !key?.trim())
+      throw new Error('cloudflare_credentials_missing_or_invalid');
+    const results = [];
+    for (const item of fixtures) {
+      const result = await convert({ account, key, ...item, request });
+      // Defensive redaction applies even to unexpected provider text that echoes credentials.
+      if (result.text)
+        result.text = result.text.split(key).join('[redacted]').split(account).join('[redacted]');
+      if (result.status === 'ok' && item.reference) {
+        result.letter_cer = characterErrorRate(
+          normalize(item.reference),
+          normalize(scoringText(result.text, item.file)),
+        );
+        result.diacritic_cer = characterErrorRate(
+          normalize(item.reference, true),
+          normalize(scoringText(result.text, item.file), true),
+        );
+      }
+      results.push(result);
+      console.log(
+        `${item.file}: ${result.status}${result.http_status ? ` (HTTP ${result.http_status})` : ''}`,
       );
+      if (result.stop) break;
     }
-    results.push(result);
-    console.log(
-      `${item.file}: ${result.status}${result.http_status ? ` (HTTP ${result.http_status})` : ''}`,
-    );
-    if (result.stop) break;
+    const report = {
+      tested_at: new Date().toISOString(),
+      provider: 'cloudflare-tomarkdown',
+      requests: results.length,
+      maximum_requests: 4,
+      automatic_retries: 0,
+      inputs: 'repository-owned synthetic fixtures only',
+      billed_cost: 'not supplied by this endpoint; check account usage',
+      results,
+    };
+    await handle.writeFile(JSON.stringify(report, null, 2) + '\n');
+    console.log('Saved synthetic results to doc/evidence/cloudflare-markdown.json');
+    if (results.some((r) => r.status !== 'ok')) process.exitCode = 1;
+  } finally {
+    await handle.close();
   }
-  const report = {
-    tested_at: new Date().toISOString(),
-    provider: 'cloudflare-tomarkdown',
-    requests: results.length,
-    maximum_requests: 4,
-    automatic_retries: 0,
-    inputs: 'repository-owned synthetic fixtures only',
-    billed_cost: 'not supplied by this endpoint; check account usage',
-    results,
-  };
-  await writeFile('doc/evidence/cloudflare-markdown.json', JSON.stringify(report, null, 2) + '\n');
-  console.log('Saved synthetic results to doc/evidence/cloudflare-markdown.json');
-  if (results.some((r) => r.status !== 'ok')) process.exitCode = 1;
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
   main().catch(() => {
     console.error(
       'Cloudflare evaluation failed; no credentials or provider error bodies were logged.',

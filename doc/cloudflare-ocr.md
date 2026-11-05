@@ -88,14 +88,16 @@ The two-book mocked generation evaluation remains unchanged: schema, answer,
 grade and private-draft checks pass at zero synthetic cost. Those checks do not
 measure real OCR or teaching quality.
 
-Verification on 2026-11-05: lint, `check:fast` (14 Node and 151 Vitest tests),
+Initial adapter verification on 2026-11-05: lint, `check:fast` (14 Node and 151 Vitest tests),
 fixtures, mocked prompt evaluation, backend/site/mobile player builds, and all
 eight browser tests passed. The full `npm run check` command stopped at rules
 emulator startup because the development stack occupied ports 9099/8080/9199.
 All three rules/vertical tests then passed using a separate local stack on
 19099/18080/19199, with its hub and logging on 14400/14500. Tests now honor
 explicit emulator endpoints while rejecting non-loopback targets. The existing
-development stack was left running. No new live OCR request was made.
+development stack was left running. No new live OCR request was made. The later
+full integration check passed with 21 Node tests, 151 unit tests, eight browser
+tests and three emulator tests; see the integration review in [verification.md](verification.md).
 
 Before family use: approve processor terms, region, retention and parent notices;
 add persisted per-job spend reservations and call idempotency; check cancellation,

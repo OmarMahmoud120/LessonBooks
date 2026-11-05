@@ -1,16 +1,16 @@
 # Cloudflare Markdown conversion evaluation
 
-Prepared: 2026-11-05. A live run completed on 2026-11-04T21:31:31Z against four
-repository-owned synthetic fixtures. This evaluator is isolated from product
-ingestion and sends only those explicitly listed fixtures. No family uploads are
-selected.
+Tested: 2026-11-05 (Asia/Amman). Four live responses were inspected after the user
+ran the command locally; the agent did not load credentials.
+This evaluator is isolated from product ingestion and sends only four explicitly
+listed repository-owned synthetic fixtures. No family uploads are selected.
 
 ## Run
 
 Dry-run, without credentials or network access:
 
 ```sh
-npm run eval:markdown
+node backend/eval/cloudflare-markdown.mjs
 ```
 
 The user supplies CLOUDFLARE_API_KEY and CLOUDFLARE_ACCOUNT_ID in backend/.env.
@@ -22,12 +22,12 @@ node --env-file=backend/.env backend/eval/cloudflare-markdown.mjs --live
 
 Do not paste credentials into chat or commit the environment file. The current
 repository pre-tool hook blocks the agent's env-file invocation; it must not be
-bypassed. The recorded live run was performed by the user outside the agent
-session.
+bypassed. No live request was made by the blocked invocation.
 
 The command makes at most four sequential requests, with no automatic retries.
-Image conversion may incur Workers AI charges. Run it once; rerunning starts a new
-batch. Actual billed cost is not supplied by this endpoint and must be checked in
+Image conversion may incur Workers AI charges. The runner claims the report before
+transport and refuses existing or interrupted batches. Review evidence and obtain
+new spend approval before deliberately clearing a report for another run. Actual billed cost is not supplied by this endpoint and must be checked in
 the Cloudflare account. Stop on HTTP errors (including auth/rate limits), transport
 errors, malformed or excessive output. A per-file conversion error is recorded
 separately from a successful HTTP status.
@@ -57,29 +57,41 @@ Credentials are redacted defensively from output; headers and full provider erro
 bodies are never logged. Responses are capped at 2 MB and extracted text at 20,000
 characters; each request has a 60-second timeout. Redirects are rejected.
 
-## Live results
-
-Four of four requests returned HTTP 200 in 9.1 seconds total; no request stopped the
-batch and no retry occurred.
-
-| Fixture                       | Result                          | Interpretation                                                                                                                                                                       |
-| ----------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| counting.pdf                  | text recovered, letter CER 0.48 | The lesson text matches the reference exactly once the generated filename/Contents/Page headings are removed; the whole reported error is formatting noise, not missing source text. |
-| arabic-counting.pdf           | text recovered, no reference    | The full three-sentence Arabic lesson is present. Headings are still injected.                                                                                                       |
-| arabic-counting-scanned.pdf   | empty output                    | Image-only PDFs are not OCRed. The endpoint returned success with no literal source text.                                                                                            |
-| arabic-counting-vocalized.png | English description, CER 8.37   | The model returned an image description instead of the Arabic transcription. No literal source text was reproduced.                                                                  |
-
-Conclusion: the default `tomarkdown` path is a formatting converter for
-text-bearing documents, not an OCR or transcription service. It is unsuitable as a
-replacement for the pinned local OCR pipeline, and it would inject extra headings
-and descriptions into grounded source text. No product ingestion path should call
-it. Re-testing would require different request options and a new explicit decision;
-the current evidence does not justify that work.
-
 ## Verification
 
-Six mocked evaluator tests pass, covering multipart requests, per-file failures,
+Eight mocked evaluator tests pass, covering multipart requests, per-file failures,
 auth/throttle failures without retry, bounded responses, safe errors and scoring.
-The live evidence above is synthetic-only and was not produced by the agent.
-Lint and check:fast pass. No new dependency is needed. Production integration and
-family-data processing remain separate decisions and are not approved.
+Lint and check:fast pass. No new dependency is needed. These checks do not prove
+live conversion quality. Production integration and family-data processing remain
+separate decisions after the actual outputs are reviewed.
+
+## Live results
+
+The user-run batch completed at 2026-11-04T21:31:31.960Z (2026-11-05 locally).
+All four requests returned HTTP 200 and Markdown, but conversion success was not
+transcription success:
+
+| Fixture              | Time     | Observed result                                                                                                                   |
+| -------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| English text PDF     | 323 ms   | Source sentence preserved exactly after removing converter headings. Corrected normalized letter CER: 0.                          |
+| Arabic text PDF      | 372 ms   | Arabic extracted, with examples such as تفاحتني and ثالثة rather than intended تفاحتين and ثلاثة. No full-reference CER assigned. |
+| Arabic scanned PDF   | 799 ms   | Filename, Contents and Page 1 headings only. No source text recovered.                                                            |
+| Vocalized Arabic PNG | 7,609 ms | English image description and paraphrased content summary. No literal Arabic transcription.                                       |
+
+The raw report is [cloudflare-markdown.json](evidence/cloudflare-markdown.json).
+Its original English CER is 0.48 because the first scorer included Cloudflare's
+filename/Contents/Page headings. Offline recalculation after removing that exact
+known wrapper gives 0. The raw report is preserved; the evaluator and its regression
+test now remove that wrapper for future runs. No additional API call was needed.
+The image's original CER above 1 measures an English description against Arabic
+reference text; it is not a useful OCR-quality percentage. The decisive observation
+is that no literal Arabic transcription was returned.
+
+Conclusion: this endpoint is useful to evaluate for text-bearing document conversion,
+but this four-case test rejects its default conversion path as our scanned-Arabic OCR
+replacement. It confirms the documented split between PDF text extraction and image
+description. This batch tested no alternative prompt/model options or direct vision endpoint.
+The separate [direct vision experiment](cloudflare-vision-test.md) and
+[bounded OCR adapter](cloudflare-ocr.md) preserve the follow-up work.
+No claim is made about Cloudflare's other AI models or OCR services. No family data was
+sent. Actual billing was not returned and has not been verified in the account dashboard.

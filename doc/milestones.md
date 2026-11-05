@@ -48,9 +48,9 @@ remaining criteria below prevent a full phase-complete claim.
 
 - [ ] Native smoke sessions for every role/command in each supported agent. Claude CLI is absent;
       a second independent review attempt hit the account usage limit. Adapter tests do not replace this.
-- [x] Current check evidence: 8 agent-policy plus 6 evaluator tests, 110 unit, 8 browser and
-      3 emulator tests; the rules suite ran directly because a user-started emulator held the
-      fixed ports. See verification.md.
+- [x] Current check evidence: 8 agent-policy plus 13 evaluator tests, 151 unit, 8 browser and
+      3 emulator tests; the full integration check passed using temporary isolated loopback
+      emulator ports, with the tracked configuration restored afterward. See verification.md.
 
 ## Remaining Phase 1 work and external gates
 
@@ -64,6 +64,9 @@ remaining criteria below prevent a full phase-complete claim.
       fake-only tests, outbox/lease sweeper, deterministic idempotent task names and Cloud Run
       service templates; real cloud delivery and deployment remain gated and unverified.
 - [ ] Approved real model/provider configuration, conservative live spend enforcement and live QA.
+- [ ] Fix pre-existing page-image deletion fencing, live dispatch publisher wiring, OIDC
+      certificate source and worker-template configuration gaps before family/cloud use;
+      see the Cloudflare integration review in verification.md.
 - [x] Two-book mocked prompt evaluation across both grades; real-model before/after reports remain pending.
 - [ ] Region, retention/tombstone policy, legally sufficient parental consent and vendor processing review.
 
