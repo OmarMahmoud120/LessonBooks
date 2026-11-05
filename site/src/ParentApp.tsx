@@ -490,6 +490,10 @@ export function ParentApp() {
                 onClick={() => {
                   setKidView(false);
                   setOpened(null);
+                  if (pinSet) {
+                    setUnlocked(false);
+                    sessionStorage.removeItem('lessonbooks-parent-unlocked');
+                  }
                 }}
               >
                 {t.kidPlayExit}
