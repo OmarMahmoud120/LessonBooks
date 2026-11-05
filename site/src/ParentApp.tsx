@@ -39,7 +39,13 @@ type Summary = {
   status: 'draft' | 'approved';
   revision: number;
 };
-type Job = { id: string; stage: string; status: string; progress: number };
+type Job = {
+  id: string;
+  stage: string;
+  status: string;
+  progress: number;
+  error: string | null;
+};
 export function ParentApp() {
   const [user, setUser] = useState<User | null>(null);
   const [email, setEmail] = useState('');
@@ -63,6 +69,7 @@ export function ParentApp() {
   const [grade, setGrade] = useState('year-1');
   const [kidLanguage, setKidLanguage] = useState<'en-GB' | 'ar'>('en-GB');
   const [file, setFile] = useState<File | null>(null);
+  const [uploadKey, setUploadKey] = useState('');
   const [job, setJob] = useState<Job | null>(null);
   const [lessons, setLessons] = useState<Summary[]>([]);
   const [progress, setProgress] = useState<{
@@ -216,6 +223,14 @@ export function ParentApp() {
   function recordEvent(event: Parameters<typeof enqueueEvent>[0]) {
     enqueueEvent(event);
     flush();
+  }
+  function retryJob() {
+    if (!job) return;
+    void perform(async () => {
+      await api(`/jobs/${job.id}/retry`, { method: 'POST' });
+      setJob({ id: job.id, stage: 'ingest', status: 'queued', progress: 0, error: null });
+      await refresh();
+    });
   }
   function unlockParentArea() {
     setUnlocked(true);
@@ -600,7 +615,7 @@ export function ParentApp() {
                         `/books?kid_id=${selectedKid!.id}`,
                         {
                           method: 'POST',
-                          headers: { 'Idempotency-Key': crypto.randomUUID() },
+                          headers: { 'Idempotency-Key': uploadKey || crypto.randomUUID() },
                           body: data,
                         },
                       );
@@ -609,6 +624,7 @@ export function ParentApp() {
                         stage: 'ingest',
                         status: 'queued',
                         progress: 0,
+                        error: null,
                       });
                     });
                   }}
@@ -619,7 +635,27 @@ export function ParentApp() {
                       type="file"
                       accept="application/pdf"
                       required
-                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                      onChange={(e) => {
+                        const chosen = e.target.files?.[0] ?? null;
+                        setFile(chosen);
+                        if (!chosen) {
+                          setUploadKey('');
+                          return;
+                        }
+                        void chosen
+                          .arrayBuffer()
+                          .then((buffer) =>
+                            crypto.subtle
+                              .digest('SHA-256', buffer)
+                              .then((digest) =>
+                                setUploadKey(
+                                  [...new Uint8Array(digest)]
+                                    .map((b) => b.toString(16).padStart(2, '0'))
+                                    .join(''),
+                                ),
+                              ),
+                          );
+                      }}
                     />
                   </label>
                   <button className="primary" disabled={busy || !file}>
@@ -629,11 +665,21 @@ export function ParentApp() {
               </section>
               {job && (
                 <section className="parent-card job-card" role="status">
-                  <h2>
-                    {job.status === 'failed' ? t.failed : (stageLabels[job.stage] ?? t.generating)}
-                  </h2>
-                  <progress value={job.progress} max={100} aria-label={t.generating} />
-                  <span>{job.progress}%</span>
+                  {job.status === 'failed' ? (
+                    <>
+                      <h2>{t.failed}</h2>
+                      <p>{t.jobErrors[job.error ?? ''] ?? t.jobErrorFallback}</p>
+                      <button className="primary" disabled={busy} onClick={retryJob}>
+                        {t.retryJob}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <h2>{stageLabels[job.stage] ?? t.generating}</h2>
+                      <progress value={job.progress} max={100} aria-label={t.generating} />
+                      <span>{job.progress}%</span>
+                    </>
+                  )}
                 </section>
               )}
               {progress && progress.lessons.length > 0 && (

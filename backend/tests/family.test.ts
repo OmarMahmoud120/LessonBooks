@@ -337,6 +337,57 @@ describe('family boundaries and generation', () => {
       max_score: 4,
     });
   });
+  it('marks the book failed, retries from ingest with a fresh fence and bounds retries', async () => {
+    const { family, kid, repo } = await setup();
+    const { job_id } = await family.upload(
+      'alice',
+      kid.id,
+      Buffer.from('%PDF-1.7 synthetic'),
+      'recover-key-0001',
+    );
+    // The failure path is exercised directly; the pipeline itself is covered elsewhere.
+    const before = await repo.get<Job>(familyPath('alice', 'generation_jobs', job_id));
+    const book = await repo.get<{ status: string }>(familyPath('alice', 'books', job_id));
+    expect(book?.status).toBe('uploaded');
+    await repo.atomic(async (tx) => {
+      const job = await tx.get<Job>(familyPath('alice', 'generation_jobs', job_id));
+      tx.put(familyPath('alice', 'generation_jobs', job_id), {
+        ...job!,
+        status: 'failed',
+        stage: 'ingest',
+        error_code: 'unsupported_source_language',
+      });
+    });
+    await expect(family.retryJob('alice', job_id)).resolves.toMatchObject({ retried: true });
+    const retried = await repo.get<Job>(familyPath('alice', 'generation_jobs', job_id));
+    expect(retried).toMatchObject({
+      status: 'queued',
+      stage: 'ingest',
+      attempt: 0,
+      manual_retries: 1,
+      outbox_pending: true,
+    });
+    expect(retried!.fence).toBe((before?.fence ?? 0) + 1);
+    expect(retried?.error_code).toBeUndefined();
+    const bookAfter = await repo.get<{ status: string }>(familyPath('alice', 'books', job_id));
+    expect(bookAfter?.status).toBe('uploaded');
+    await expect(family.retryJob('alice', job_id)).rejects.toThrow('retry_not_allowed');
+    // Permanent failure marks the book failed; retry resets it and the limit holds.
+    await repo.atomic(async (tx) => {
+      const job = await tx.get<Job>(familyPath('alice', 'generation_jobs', job_id));
+      tx.put(familyPath('alice', 'generation_jobs', job_id), { ...job!, status: 'failed' });
+    });
+    await repo.atomic(async (tx) => {
+      const bookRecord = await tx.get<{ status: string }>(familyPath('alice', 'books', job_id));
+      tx.put(familyPath('alice', 'books', job_id), { ...bookRecord!, status: 'failed' });
+    });
+    await expect(family.retryJob('alice', job_id)).resolves.toMatchObject({ retried: true });
+    await repo.atomic(async (tx) => {
+      const job = await tx.get<Job>(familyPath('alice', 'generation_jobs', job_id));
+      tx.put(familyPath('alice', 'generation_jobs', job_id), { ...job!, status: 'failed' });
+    });
+    await expect(family.retryJob('alice', job_id)).rejects.toThrow('retry_limit_reached');
+  });
   it('deletion wins over a worker that is still extracting content', async () => {
     const { family, kid, repo, assets } = await setup();
     const { job_id } = await family.upload(

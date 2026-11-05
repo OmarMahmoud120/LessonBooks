@@ -71,6 +71,7 @@ export type Job = {
   prompt_version: string;
   policy_version: string;
   outbox_pending: boolean;
+  manual_retries?: number;
 };
 export type Assignment = {
   id: string;

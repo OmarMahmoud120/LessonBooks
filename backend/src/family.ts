@@ -326,6 +326,37 @@ export class FamilyService {
     assertLesson(value);
     return { record, lesson: value };
   }
+  // Parent-triggered retry of a failed generation: clears stage progress by restarting at
+  // ingest (every stage overwrites its state slice in order) with a fresh fence so stale
+  // workers cannot commit, and stays bounded.
+  async retryJob(uid: string, jobId: string) {
+    return this.repo.atomic(async (tx) => {
+      const path = familyPath(uid, 'generation_jobs', jobId);
+      const job = await tx.get<Job>(path);
+      if (!job) throw new DomainError('job_not_found', 404);
+      await this.active(tx, uid, job.kid_id);
+      if (job.status !== 'failed') throw new DomainError('retry_not_allowed', 409);
+      if ((job.manual_retries ?? 0) >= 2) throw new DomainError('retry_limit_reached', 409);
+      const bookPath = familyPath(uid, 'books', job.book_id);
+      const book = await tx.get<Book>(bookPath);
+      if (book && book.status === 'failed') tx.put(bookPath, { ...book, status: 'processing' });
+      const next: Job = {
+        ...job,
+        stage: 'ingest',
+        status: 'queued',
+        progress: 0,
+        attempt: 0,
+        fence: job.fence + 1,
+        lease_until: 0,
+        next_attempt_at: 0,
+        manual_retries: (job.manual_retries ?? 0) + 1,
+        outbox_pending: true,
+      };
+      delete next.error_code;
+      tx.put(path, next);
+      return { retried: true };
+    });
+  }
   async approve(uid: string, id: string, revision: number) {
     return this.repo.atomic(async (tx) => {
       const path = familyPath(uid, 'lessons', id);

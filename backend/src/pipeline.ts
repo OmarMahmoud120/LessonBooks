@@ -232,6 +232,11 @@ export class Pipeline {
           next_attempt_at: this.now() + 1000 * 2 ** current.attempt,
           outbox_pending: retryable,
         });
+        // A permanently failed book must not stay "processing"; a retriable one keeps its
+        // progress visible until the retry starts.
+        const bookPath = familyPath(uid, 'books', job.book_id);
+        const bookRecord = await tx.get<Book>(bookPath);
+        if (bookRecord && !retryable) tx.put(bookPath, { ...bookRecord, status: 'failed' });
         return { retryable, retryStage, retryAttempt, fence: current.fence };
       });
       if (outcome?.retryable)

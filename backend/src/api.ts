@@ -209,6 +209,11 @@ export async function createAPI(
       };
     },
   );
+  app.post<{ Params: { id: string } }>(
+    '/v1/jobs/:id/retry',
+    { config: { rateLimit: { max: 10, timeWindow: '1 hour' } }, schema: { params: idSchema } },
+    async (request) => families.retryJob(uid(request), request.params.id),
+  );
   app.get('/v1/lessons', async (request) => {
     await families.repo.atomic((tx) => families.active(tx, uid(request)));
     return (await families.repo.list<LessonRecord>(familyPath(uid(request), 'lessons'))).map(

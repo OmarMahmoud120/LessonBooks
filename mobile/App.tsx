@@ -83,6 +83,14 @@ function ParentPreview() {
     owner_uid: string;
   } | null>(null);
   const [status, setStatus] = useState('');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobView, setJobView] = useState<{
+    status: string;
+    progress: number;
+    error: string | null;
+  } | null>(null);
+  const [uploadAsset, setUploadAsset] = useState<{ uri: string; name: string } | null>(null);
+  const [uploadKey, setUploadKey] = useState('');
   const [busy, setBusy] = useState(false);
   async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = await auth.currentUser?.getIdToken();
@@ -135,6 +143,10 @@ function ParentPreview() {
   function clearTransient() {
     setStatus('');
     setOpened(null);
+    setJobId(null);
+    setJobView(null);
+    setUploadAsset(null);
+    setUploadKey('');
   }
   useEffect(() => {
     void uploadCopies.cleanup().catch(() => setStatus(t.error));
@@ -163,6 +175,40 @@ function ParentPreview() {
     }, 3000);
     return () => clearInterval(timer);
   }, [user]);
+  useEffect(() => {
+    if (!jobId || !user || ['completed', 'failed', 'cancelled'].includes(jobView?.status ?? ''))
+      return;
+    const timer = setInterval(() => {
+      void api<{ status: string; progress: number; error: string | null }>(`/jobs/${jobId}`)
+        .then((next) => {
+          setJobView(next);
+          if (next.status === 'completed') {
+            setStatus('');
+            void refresh().catch(() => {});
+          } else if (next.status === 'failed') {
+            setStatus(t.jobErrors[next.error ?? ''] ?? t.jobErrorFallback);
+          } else setStatus(`${t.generating} ${next.progress}%`);
+        })
+        .catch(() => {});
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [jobId, jobView?.status, user]);
+  async function runUpload(asset: { uri: string; name: string }, key: string, kidId: string) {
+    const data = new FormData();
+    data.append('book', {
+      uri: asset.uri,
+      name: asset.name,
+      type: 'application/pdf',
+    } as unknown as Blob);
+    const created = await api<{ job_id: string }>(`/books?kid_id=${kidId}`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': key },
+      body: data,
+    });
+    setJobId(created.job_id);
+    setJobView({ status: 'queued', progress: 0, error: null });
+    setStatus(t.generating);
+  }
   function recordEvent(
     event: Parameters<NonNullable<Parameters<typeof LessonPreview>[0]['onEvent']>>[0],
   ) {
@@ -215,6 +261,19 @@ function ParentPreview() {
         <Text style={styles.brand}>{t.brand}</Text>
         <Text>{t.notice}</Text>
         <Text accessibilityLiveRegion="polite">{status}</Text>
+        {jobView?.status === 'failed' && uploadAsset && kid && uploadKey && (
+          <Button
+            title={t.retryJob}
+            disabled={busy}
+            onPress={() =>
+              void perform(async () => {
+                await api(`/jobs/${jobId}/retry`, { method: 'POST' });
+                setStatus(t.retryStarted);
+                await runUpload(uploadAsset, uploadKey, kid.id);
+              })
+            }
+          />
+        )}
         {!user ? (
           <>
             <Text style={styles.heading}>{t.signIn}</Text>
@@ -430,20 +489,10 @@ function ParentPreview() {
                         if (!owner || auth.currentUser?.uid !== owner)
                           throw new Error('signed_out');
                         const file = chosen.assets[0]!;
-                        const data = new FormData();
-                        data.append('book', {
-                          uri: file.uri,
-                          name: 'book.pdf',
-                          type: 'application/pdf',
-                        } as unknown as Blob);
-                        await api(`/books?kid_id=${kid.id}`, {
-                          method: 'POST',
-                          headers: {
-                            'Idempotency-Key': `mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                          },
-                          body: data,
-                        });
-                        setStatus(t.generating);
+                        const key = `mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                        setUploadAsset({ uri: file.uri, name: 'book.pdf' });
+                        setUploadKey(key);
+                        await runUpload({ uri: file.uri, name: 'book.pdf' }, key, kid.id);
                       }),
                     )
                   }
