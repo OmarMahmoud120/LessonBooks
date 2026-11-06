@@ -241,7 +241,14 @@ Observed against the running local services:
 `npm test` passes 249 unit tests, including 21 Keycloak verification/admin tests and
 recent-auth allow/deny cases. `npm run typecheck` and targeted ESLint/Prettier checks
 pass. The Postgres adapter is still unwired; Firestore remains the document store.
-Not verified: mobile login on a device or emulator, SMTP for verification/reset,
-VPS issuer/TLS, Keycloak backup/restore and upgrade drills. Full `npm run lint`
+The mobile iOS JavaScript export (`npm run export:ios`) bundles the OIDC client with
+the SDK-matched `expo-auth-session` and `expo-web-browser`, and `app.json` now
+registers the `lessonbooks` scheme used as the redirect URI.
+
+Not verified: mobile login on a device or emulator (the redirect round trip needs a
+running app), SMTP for verification/reset, VPS issuer/TLS, Keycloak backup/restore
+and upgrade drills. The untracked `site/tests/browser/offline-sync.spec.ts` still
+fills the removed Firebase email/password form and fails until it drives the
+Keycloak redirect instead; it was left unmodified. Full `npm run lint`
 remains blocked by the unrelated untracked
 `site/tests/browser/offline-sync.spec.ts`.
