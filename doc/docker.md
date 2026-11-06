@@ -28,10 +28,11 @@ uses an allowlist excluding private books, credentials, environments and native 
 output. Images have no host source mounts. Use `docker compose --env-file /dev/null watch`
 for source edit/rebuild on the running stack.
 
-API: 127.0.0.1:3001. Auth/Firestore/Storage: localhost 9099/8080/9199. Garage S3:
-127.0.0.1:3900. Existing web/mobile clients use the Firebase ports; stop conflicting
-host services first. The worker exposes health only on the private network. All AI is
-mocked and private assets are stored in Garage.
+API: 127.0.0.1:3001. Keycloak: 127.0.0.1:8081 (realm `lessonbooks`). Firestore/Storage
+emulators: localhost 8080/9199; the Firebase Auth emulator still starts on 9099 for
+the rollback path. Garage S3: 127.0.0.1:3900. Stop conflicting host services first.
+The worker exposes health only on the private network. All AI is mocked, identity is
+Keycloak and private assets are stored in Garage.
 
 The signatures job must finish successfully before worker startup. If the vendor
 CDN rejects updates, startup fails closed. Inspect signatures logs and retry after
@@ -66,9 +67,39 @@ distribution; see [ADR 0014](decisions/0014-garage-replaces-minio-for-private-as
 - `backend/infra/garage.toml` contains a synthetic local RPC secret. A VPS deployment
   must generate its own secret, access keys and encrypted backups.
 
-The Firebase Storage emulator still runs because Firebase Auth and Firestore remain
-the active runtime; asset writes go to Garage under `ASSET_STORE=s3`. Setting
+The Firebase Storage emulator still runs because Firestore remains the document
+store; asset writes go to Garage under `ASSET_STORE=s3`. Setting
 `ASSET_STORE=firebase` restores the legacy Cloud Storage adapter for comparison.
+
+## Identity (Keycloak)
+
+Compose runs Keycloak 26 with its own PostgreSQL database, on the private network
+plus a loopback port for browsers.
+
+- The realm, clients and one synthetic local parent are imported from
+  `backend/infra/keycloak/realm-lessonbooks.json` on first start. The realm is only
+  imported when it does not already exist; delete the realm through the admin API and
+  restart Keycloak to re-import after editing the file.
+- `lessonbooks-site` (website) and `lessonbooks-mobile` (app) are public clients using
+  authorization-code + PKCE. They hold no secret. `lessonbooks-api` is a confidential
+  service account used by the API only to delete identities. All credentials in the
+  realm file and Compose are synthetic and local-only.
+- The API verifies RS256 access tokens against the realm JWKS. `KEYCLOAK_ISSUER` is
+  the browser-facing issuer that appears in tokens; `KEYCLOAK_BACKCHANNEL_URL` is the
+  internal URL used for JWKS and admin calls. Neither is read from a token.
+- Bootstrap admin: `local-admin` / `local-only-keycloak-admin`. The API never uses it.
+- `npm run docker:test` creates a synthetic parent through the admin API, temporarily
+  enables the password grant on the website client for scripted token acquisition,
+  and disables it again afterwards. The browser flow uses PKCE, not that grant.
+- Keycloak's `start` command auto-builds inside `/opt/keycloak`, so this local service
+  cannot use a read-only root. A VPS image should bake `kc.sh build` and run
+  `--optimized`.
+
+## Switching identity back to Firebase
+
+Set `AUTH_PROVIDER=firebase` (the default) and use Firebase emulator tokens again.
+Firestore and the Firebase Auth emulator are untouched by the Keycloak path, so this
+is the rollback path until Phase 6 removes it.
 
 ## Runtime image packaging
 

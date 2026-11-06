@@ -109,14 +109,25 @@ direct-child listing, serializable transactions and prefix deletion, with 11 tes
 including a `FamilyService` create/delete scenario. Phase 2's `S3Assets` adapter is
 implemented behind the existing `Assets` interface, wired with `ASSET_STORE=s3`, and
 covered by 11 tests for bucket bootstrap, private writes, prefix isolation and
+batches larger than 1000 objects. The Compose stack runs a digest-pinned Garage
+service with a persistent volume, health check and private default bucket; real
+put/get/prefix-delete, restart durability and anonymous-access rejection were checked
+against it.
 
-> 1000-object batching. The Compose stack now runs a digest-pinned Garage service with
-> a persistent volume, health check and private default bucket; real put/get/prefix
-> delete and anonymous-access rejection were checked against it. Real-PostgreSQL
-> transaction verification, Keycloak auth, dispatch and client changes remain open.
-> No VPS was provisioned, no data was migrated, no Google dependency was removed from
-> the running app, and no live model or family-data use is authorized. See
-> [vps-migration.md](vps-migration.md).
+Phase 3 replaced Firebase Auth in the running app. Keycloak 26 with its own
+PostgreSQL is in Compose, the realm and PKCE clients are configuration in
+`backend/infra/keycloak/`, the API verifies Keycloak access tokens against the realm
+JWKS, and account deletion also deletes the Keycloak identity
+([ADR 0015](decisions/0015-keycloak-token-verification-and-admin-model.md)). The
+website and mobile app use OIDC login and no longer bundle the Firebase SDK. A
+Compose journey with `AUTH_PROVIDER=keycloak` passed end to end, and a real browser
+login with PKCE loaded the parent dashboard without console errors.
+
+Real-PostgreSQL transaction verification, Firestore-to-Postgres wiring, polling
+dispatch changes, VPS provisioning and mobile-device login remain open. No VPS was
+provisioned, no data was migrated, and no live model or family-data use is
+authorized. Firestore still stores family documents and Cloud Tasks remains the
+cloud dispatch path. See [vps-migration.md](vps-migration.md).
 
 ## Android native attempt — 2026-11-04
 

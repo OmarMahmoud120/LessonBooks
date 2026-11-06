@@ -88,26 +88,47 @@ Acceptance: the emulator vertical journey passes with files stored in Garage and
 same family-scoped deletion behavior; VPS durability and restore verification remain
 open.
 
-## Phase 3 — Keycloak authentication
+## Phase 3 — Keycloak authentication (implemented, VPS/device verification pending)
+
+Decisions for token verification, recent authentication and identity deletion are
+recorded in [ADR 0015](decisions/0015-keycloak-token-verification-and-admin-model.md).
 
 Tasks:
 
-- Add Keycloak + its PostgreSQL schema to Compose.
-- Realm and client configuration as code (web public client with PKCE; mobile public
-  client with PKCE); no client secret in the website or app.
-- Replace Firebase client SDK usage in `site/src/ParentApp.tsx` and `mobile/App.tsx`
-  with OIDC login, token refresh and logout.
-- Replace backend Firebase token verification with Keycloak JWKS verification:
-  signature, issuer, audience, expiry and `sub`.
-- Preserve recent-auth requirements for PIN set and account deletion using
-  `auth_time` or a re-authentication flow.
-- Disable public self-service registration if parent accounts should be invite-only;
-  decide before launch.
-- Tests: valid/expired/wrong-issuer/wrong-audience/malformed tokens, disabled user,
-  refresh, logout, recent-auth enforcement, no token logging.
+- [x] Add Keycloak 26 and a PostgreSQL service to Compose, with a persistent
+      `keycloak-db-data` volume, health checks and the database on the private
+      network. Keycloak needs a writable root because `start` auto-builds; the VPS
+      image should bake `kc.sh build` and run `--optimized`.
+- [x] Realm and clients as code in `backend/infra/keycloak/realm-lessonbooks.json`:
+      `lessonbooks-site` and `lessonbooks-mobile` are public PKCE clients with
+      `S256`, an audience mapper for `lessonbooks-api`, five-minute access tokens
+      and refresh-token rotation. `lessonbooks-api` is a confidential service
+      account with `view-users` and `manage-users`.
+- [x] Replace the Firebase client SDK in `site/src/ParentApp.tsx` and
+      `mobile/App.tsx` with OIDC authorization-code + PKCE (`oidc-client-ts` and
+      `expo-auth-session`); both clients now send an access token, refresh it, and
+      sign out through Keycloak. `firebase` is no longer a dependency of either.
+- [x] Replace Firebase token verification in `backend/src/auth-keycloak.ts`:
+      RS256 JWKS verification of signature, issuer, audience and expiry, requiring
+      `sub` and `sid`, with the JWKS fetched from an internal backchannel URL.
+- [x] Preserve recent auth for PIN set and account deletion by resolving the SSO
+      session start through the admin API, failing closed when it cannot be proven.
+- [x] Delete the Keycloak identity when a family is deleted.
+- [x] Tests: valid, expired, wrong-issuer, wrong-audience, wrong-key, unsigned,
+      malformed, missing-`sid` tokens; admin token caching; user deletion
+      success/404/refusal; session lookup and revocation; recent-auth allow/deny.
+- [ ] Email delivery (SMTP) for verification and password reset, and the decision to
+      keep registration open, invite-only or admin-created.
+- [ ] Mobile login on a device or emulator, including the custom-scheme redirect.
+- [ ] Keycloak backup/restore and upgrade drills on the VPS.
 
-Acceptance: website and mobile complete signup/login and authorized API calls against
-Keycloak; API rejects all invalid token classes.
+Evidence: the Compose journey signs in with a synthetic Keycloak user, stores assets
+in Garage, completes the lesson pipeline and deletes both the family documents and
+the Keycloak identity. The website completed a real PKCE login in a browser with no
+console errors.
+
+Acceptance: website and mobile complete login and authorized API calls against
+Keycloak; the API rejects every invalid token class; identity deletion is verified.
 
 ## Phase 4 — Dispatch and runtime configuration
 

@@ -4,7 +4,7 @@ This is an engineering design aid, not legal advice or a claim of compliance. No
 
 | Data                                                           | Why collected                        | Proposed handling                                    |
 | -------------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------- |
-| Parent email / Auth UID                                        | account authentication and ownership | Firebase Auth; avoid duplicating email               |
+| Parent email / Auth subject                                    | account authentication and ownership | Keycloak or Firebase Auth; avoid duplicating email   |
 | Consent type/version/time/method                               | document parental choices            | server timestamps; withdrawal supported              |
 | Nickname, preset avatar, age band, grade, curriculum, language | adapt lessons                        | no DOB, photo, school name or contact fields         |
 | Uploaded book and extracted content                            | produce lessons                      | private quarantine and processing storage            |

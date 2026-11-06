@@ -2,7 +2,7 @@
 
 Proposed v1 surface; implementation and tests must be reconciled here as endpoints land.
 
-Parent requests use Authorization: Bearer <Firebase ID token>. Validate signature, audience, issuer and expiry using Admin SDK; derive parentId from verified claims. Never accept a request-selected owner. Local emulator tokens are accepted only in explicit emulator mode. Responses containing family data use Cache-Control: no-store.
+Parent requests use Authorization: Bearer <access token>. The default provider is Firebase Auth and verifies tokens through the Admin SDK; `AUTH_PROVIDER=keycloak` verifies RS256 access tokens against the realm JWKS and requires the configured issuer and audience. In both cases the API derives parentId from the verified `sub` and never accepts a request-selected owner. PIN set and account deletion require a recent interactive login (five minutes), resolved from the Keycloak SSO session start so a client cannot forge it. Local emulator tokens are accepted only in explicit emulator mode. Responses containing family data use Cache-Control: no-store.
 
 | Method/path                  | Purpose                                               |
 | ---------------------------- | ----------------------------------------------------- |

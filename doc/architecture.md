@@ -4,7 +4,7 @@ Status: approved design; implementation evidence is tracked in milestones.md.
 
 ```mermaid
 flowchart LR
-  Parent[Parent web / React Native] --> Auth[Firebase Auth]
+  Parent[Parent web / React Native] --> Auth[Keycloak or Firebase Auth]
   Parent --> API[Fastify API / Cloud Run]
   API --> DB[(Firestore family namespaces)]
   API --> Private[(Private asset store: Garage / legacy Cloud Storage)]
@@ -18,7 +18,7 @@ flowchart LR
   API --> Player[Shared static React lesson player]
 ```
 
-Public Hosting contains code only. Family JSON/assets require authenticated API access; signed asset URLs, if introduced, are short-lived bearer credentials. ID randomness is not authorization. The API verifies Firebase tokens and derives parent identity from the token, never a request parent_id. All direct client Firestore/Storage access is denied.
+Public Hosting contains code only. Family JSON/assets require authenticated API access; signed asset URLs, if introduced, are short-lived bearer credentials. ID randomness is not authorization. The API verifies the provider's access token (Keycloak JWKS or Firebase Admin SDK) and derives parent identity from its subject, never a request parent_id. All direct client Firestore/Storage access is denied.
 
 Node/TypeScript + Fastify, npm workspaces, Firestore, Storage and Cloud Tasks. A
 no-Google VPS migration to PostgreSQL, Garage, Keycloak and polling dispatch is in

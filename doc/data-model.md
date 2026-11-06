@@ -1,6 +1,6 @@
 # Data model and access matrix
 
-Canonical family root: parents/{parentId}. The Firebase Auth UID is the parentId. Subcollections below that root: kids, books, generation_jobs, lessons, consent_records, assignments and progress_events. lesson_results has no writer yet.
+Canonical family root: parents/{parentId}. The identity-provider subject (`sub`) is the parentId: the Firebase Auth UID by default, or the Keycloak user id when `AUTH_PROVIDER=keycloak`. Subcollections below that root: kids, books, generation_jobs, lessons, consent_records, assignments and progress_events. lesson_results has no writer yet.
 
 | Entity                 | Principal fields                                                                                                                 |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------- |

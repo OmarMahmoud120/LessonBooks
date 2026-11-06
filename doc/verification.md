@@ -210,3 +210,38 @@ identity provider. No PostgreSQL, VPS, Google resource, provider call or deploym
 was created or changed. Full `npm run lint` is temporarily blocked by an unrelated
 untracked `site/tests/browser/offline-sync.spec.ts` from other work; the changed
 files pass targeted ESLint and Prettier checks.
+
+## VPS migration phase 3 — Keycloak authentication — 2026-11-06
+
+Keycloak 26 runs in Compose with its own PostgreSQL database, a persistent volume and
+a health check; the realm, two public PKCE clients and one confidential service
+account are imported from `backend/infra/keycloak/realm-lessonbooks.json`. The API
+verifies Keycloak access tokens in `backend/src/auth-keycloak.ts` (RS256, exact
+issuer, `lessonbooks-api` audience, expiry, `sub` and `sid`), and the website and
+mobile app use authorization-code + PKCE instead of the Firebase client SDK.
+
+Observed against the running local services:
+
+- A real access token carried `aud: lessonbooks-api`,
+  `iss: http://127.0.0.1:8081/realms/lessonbooks` and a `sid`. The API returned 200
+  for `/v1/family`; a tampered signature and a malformed token each returned 401, and
+  a request without `Authorization` returned 401.
+- `DELETE /v1/account` returned 200 immediately after login and the Keycloak admin API
+  then reported no user with that name, so family deletion also removed the identity.
+- `npm run docker:test` passed the full journey with a synthetic Keycloak parent:
+  consent, an owned English PDF, a scanned Arabic PDF, worker scanning and OCR from
+  Garage, three drafts per book, approval, child deletion and account deletion. The
+  script re-authenticates before deletion because the recent-auth window is five
+  minutes, and it leaves no objects behind.
+- In the browser, the website redirected to Keycloak with an S256 `code_challenge`,
+  completed the code exchange, loaded the parent dashboard through the API with no
+  console errors, persisted the session across a reload, and signed out through the
+  Keycloak end-session endpoint.
+
+`npm test` passes 249 unit tests, including 21 Keycloak verification/admin tests and
+recent-auth allow/deny cases. `npm run typecheck` and targeted ESLint/Prettier checks
+pass. The Postgres adapter is still unwired; Firestore remains the document store.
+Not verified: mobile login on a device or emulator, SMTP for verification/reset,
+VPS issuer/TLS, Keycloak backup/restore and upgrade drills. Full `npm run lint`
+remains blocked by the unrelated untracked
+`site/tests/browser/offline-sync.spec.ts`.
