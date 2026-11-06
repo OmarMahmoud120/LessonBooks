@@ -44,6 +44,45 @@ it('accepts a loopback Garage endpoint for private assets', () => {
     endpoint: 'http://127.0.0.1:3900',
   });
 });
+const keycloakEnv = {
+  AUTH_PROVIDER: 'keycloak',
+  KEYCLOAK_ISSUER: 'http://127.0.0.1:8081/realms/lessonbooks',
+  KEYCLOAK_BACKCHANNEL_URL: 'http://keycloak:8080',
+  KEYCLOAK_AUDIENCE: 'lessonbooks-api',
+  KEYCLOAK_CLIENT_ID: 'lessonbooks-api',
+  KEYCLOAK_CLIENT_SECRET: 'local-only-api-service-secret-0123456789',
+};
+it('keeps Firebase Auth as the default identity provider', () => {
+  expect(runtimeConfig({}).auth).toEqual({ kind: 'firebase' });
+});
+it('accepts Keycloak with a public issuer and an internal backchannel', () => {
+  expect(runtimeConfig(keycloakEnv)).toMatchObject({
+    mode: 'emulator',
+    auth: {
+      kind: 'keycloak',
+      issuer: 'http://127.0.0.1:8081/realms/lessonbooks',
+      backchannelUrl: 'http://keycloak:8080',
+      audience: 'lessonbooks-api',
+      clientId: 'lessonbooks-api',
+    },
+  });
+});
+it.each([
+  { AUTH_PROVIDER: 'auth0' },
+  { ...keycloakEnv, KEYCLOAK_ISSUER: undefined },
+  { ...keycloakEnv, KEYCLOAK_ISSUER: 'http://127.0.0.1:8081/realms/' },
+  { ...keycloakEnv, KEYCLOAK_ISSUER: 'http://127.0.0.1:8081/' },
+  { ...keycloakEnv, KEYCLOAK_ISSUER: 'https://127.0.0.1:8081/realms/lessonbooks' },
+  { ...keycloakEnv, KEYCLOAK_ISSUER: 'http://example.com/realms/lessonbooks' },
+  { ...keycloakEnv, KEYCLOAK_BACKCHANNEL_URL: 'http://example.com:8080' },
+  { ...keycloakEnv, KEYCLOAK_BACKCHANNEL_URL: undefined },
+  { ...keycloakEnv, KEYCLOAK_CLIENT_SECRET: 'short' },
+  { ...keycloakEnv, KEYCLOAK_CLIENT_SECRET: undefined },
+  { ...keycloakEnv, KEYCLOAK_AUDIENCE: 'bad audience' },
+  { ...cloudEnv, AUTH_PROVIDER: 'keycloak' },
+])('rejects unsafe Keycloak settings %j', (env) => {
+  expect(() => runtimeConfig(env)).toThrow();
+});
 it.each([
   { ASSET_STORE: 'minio' },
   { ...s3Env, S3_ENDPOINT: '' },

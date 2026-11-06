@@ -6,6 +6,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { FirestoreRepository, StorageAssets, type Assets } from './persistence';
 import { S3Assets, createS3Transport } from './persistence-s3';
+import { KeycloakAdmin, KeycloakTokens } from './auth-keycloak';
 import { FamilyService } from './family';
 import { createAPI } from './api';
 import { Pipeline } from './pipeline';
@@ -21,7 +22,22 @@ const ingestor = createRuntimeIngestor(config, process.env);
 const projectId = config.mode === 'cloud' ? config.projectId! : 'demo-lessonbooks';
 const firebase = initializeApp({ projectId, storageBucket: `${projectId}.appspot.com` });
 Object.assign(process.env, config.endpoints);
-const auth = getAuth(firebase);
+// Firestore still stores family documents in both modes; identity moves to Keycloak
+// when AUTH_PROVIDER=keycloak. The Firebase user-deletion hook is only used by Firebase.
+const firebaseAuth = config.auth.kind === 'firebase' ? getAuth(firebase) : undefined;
+const keycloak =
+  config.auth.kind === 'keycloak'
+    ? {
+        admin: new KeycloakAdmin(config.auth),
+        tokens: new KeycloakTokens(config.auth, new KeycloakAdmin(config.auth)),
+      }
+    : undefined;
+const verifyToken = keycloak
+  ? (token: string) => keycloak.tokens.verify(token)
+  : async (token: string) => {
+      const identity = await firebaseAuth!.verifyIdToken(token, true);
+      return { uid: identity.uid, auth_time: identity.auth_time };
+    };
 const repo = new FirestoreRepository(getFirestore(firebase));
 let assets: Assets;
 if (config.assets.kind === 's3') {
@@ -32,8 +48,12 @@ if (config.assets.kind === 's3') {
   assets = new StorageAssets(getStorage(firebase).bucket());
 }
 const families = new FamilyService(repo, assets, async (uid) => {
+  if (keycloak) {
+    await keycloak.admin.deleteUser(uid);
+    return;
+  }
   try {
-    await auth.deleteUser(uid);
+    await firebaseAuth!.deleteUser(uid);
   } catch (error) {
     if ((error as { code?: string }).code !== 'auth/user-not-found') throw error;
   }
@@ -46,16 +66,10 @@ const app =
         new CloudTasksOidcVerifier(config.workerUrl!, config.workerServiceAccount!),
       )
     : config.mode === 'cloud' && config.role === 'api'
-      ? await createAPI(families, async (token) => {
-          const identity = await auth.verifyIdToken(token, true);
-          return { uid: identity.uid, auth_time: identity.auth_time };
-        })
+      ? await createAPI(families, verifyToken)
       : config.role === 'worker'
         ? Fastify({ logger: false })
-        : await createAPI(families, async (token) => {
-            const identity = await auth.verifyIdToken(token, true);
-            return { uid: identity.uid, auth_time: identity.auth_time };
-          });
+        : await createAPI(families, verifyToken);
 if (config.role === 'worker' && config.mode === 'emulator')
   app.get('/health', async () => ({ status: 'ok', mode: 'mock-worker' }));
 let running = false;

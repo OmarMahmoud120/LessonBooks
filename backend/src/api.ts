@@ -6,7 +6,23 @@ import { DomainError, familyPath, type Job, type Kid, type LessonRecord } from '
 import { FamilyService } from './family';
 import catalog from '../../doc/curricula/england.json';
 
-export type Identity = { uid: string; auth_time: number };
+// Identity providers that cannot put a trustworthy authentication time in the
+// access token resolve it lazily, so no extra lookup happens on ordinary requests.
+export type Identity = { uid: string; auth_time: number | (() => Promise<number>) };
+export async function authTime(identity: Identity): Promise<number> {
+  return typeof identity.auth_time === 'function' ? identity.auth_time() : identity.auth_time;
+}
+// Fails closed: an identity provider that cannot prove a recent login is treated as
+// unauthenticated rather than as a stale session.
+async function requireRecentAuth(identity: Identity) {
+  let authenticatedAt: number;
+  try {
+    authenticatedAt = await authTime(identity);
+  } catch {
+    throw new DomainError('unauthenticated', 401);
+  }
+  if (Date.now() / 1000 - authenticatedAt > 300) throw new DomainError('recent_auth_required', 401);
+}
 export async function createAPI(
   families: FamilyService,
   verify: (token: string) => Promise<Identity>,
@@ -133,8 +149,7 @@ export async function createAPI(
   );
   app.delete('/v1/account', async (request) => {
     const identity = identities.get(request)!;
-    if (Date.now() / 1000 - identity.auth_time > 300)
-      throw new DomainError('recent_auth_required', 401);
+    await requireRecentAuth(identity);
     await families.deleteAccount(uid(request));
     return { deleted: true };
   });
@@ -152,8 +167,7 @@ export async function createAPI(
     },
     async (request) => {
       const identity = identities.get(request)!;
-      if (Date.now() / 1000 - identity.auth_time > 300)
-        throw new DomainError('recent_auth_required', 401);
+      await requireRecentAuth(identity);
       await families.setPin(uid(request), request.body.pin);
       return { pin_set: true };
     },

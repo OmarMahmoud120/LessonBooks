@@ -44,6 +44,81 @@ services:
       timeout: 5s
       retries: 12
       start_period: 10s
+  # Local identity provider. PostgreSQL and the bootstrap admin use synthetic
+  # local-only values; a VPS deployment must inject its own secrets.
+  keycloak-db:
+    image: postgres:17-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac
+    init: true
+    # The official entrypoint drops from root to the postgres user and fixes
+    # ownership of the data volume, so those capabilities are required.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 256m
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-local-only-keycloak-db-password}
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+    volumes:
+      - keycloak-db-data:/var/lib/postgresql/data
+    networks: [private]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U keycloak -d keycloak']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
+    init: true
+    # `start` auto-builds an optimized server inside /opt/keycloak on every boot,
+    # so this local service cannot use a read-only root. A VPS deployment should
+    # bake `kc.sh build` into the image and run it with `--optimized` instead.
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    cpus: 2.0
+    mem_limit: 1536m
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+      - /opt/keycloak/data/tmp:size=128m,mode=1777
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-local-only-keycloak-db-password}
+      # Browsers use the loopback hostname; tokens issued here carry that issuer.
+      # The API fetches JWKS from the internal service URL instead.
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://127.0.0.1:8081}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: 'true'
+      KC_HTTP_ENABLED: 'true'
+      KC_HTTP_PORT: '8080'
+      KC_HEALTH_ENABLED: 'true'
+      KC_METRICS_ENABLED: 'false'
+      KC_PROXY_HEADERS: xforwarded
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-local-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-local-only-keycloak-admin}
+      KC_SPI_EVENTS_LISTENER_JBOSS_LOGGING__LEVEL: warn
+    command: ['start', '--import-realm', '--log-level=warn']
+    volumes:
+      - ./backend/infra/keycloak/realm-lessonbooks.json:/opt/keycloak/data/import/realm-lessonbooks.json:ro
+    ports:
+      - '127.0.0.1:8081:8080'
+    networks: [private, local]
+    depends_on:
+      keycloak-db: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "{ printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&0; grep 'HTTP/1.[01] 200'; } 0<>/dev/tcp/127.0.0.1/9000",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
   emulators:
     build: { context: ., dockerfile: backend/Dockerfile, target: emulators }
     init: true
@@ -82,12 +157,19 @@ services:
       S3_REGION: garage
       S3_ACCESS_KEY_ID: ${GARAGE_DEFAULT_ACCESS_KEY:-GK0123456789abcdef0123456789abcdef}
       S3_SECRET_ACCESS_KEY: ${GARAGE_DEFAULT_SECRET_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      AUTH_PROVIDER: keycloak
+      KEYCLOAK_ISSUER: ${KEYCLOAK_PUBLIC_URL:-http://127.0.0.1:8081}/realms/lessonbooks
+      KEYCLOAK_BACKCHANNEL_URL: http://keycloak:8080
+      KEYCLOAK_AUDIENCE: lessonbooks-api
+      KEYCLOAK_CLIENT_ID: lessonbooks-api
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_API_CLIENT_SECRET:-local-only-api-service-secret-0123456789}
       SERVICE_ROLE: api
     networks: [private, local]
     ports: ['127.0.0.1:3001:3001']
     depends_on:
       emulators: { condition: service_healthy }
       garage: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
     develop:
       watch:
         - { action: rebuild, path: backend/src }
@@ -105,6 +187,7 @@ services:
     depends_on:
       emulators: { condition: service_healthy }
       garage: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
       signatures: { condition: service_completed_successfully }
     develop:
       watch:
@@ -118,3 +201,4 @@ volumes:
   emulator-data: {}
   scanner-data: {}
   garage-data: {}
+  keycloak-db-data: {}

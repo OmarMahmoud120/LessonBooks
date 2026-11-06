@@ -1,4 +1,14 @@
 export type RuntimeMode = 'emulator' | 'cloud';
+export type AuthConfig =
+  | { kind: 'firebase' }
+  | {
+      kind: 'keycloak';
+      issuer: string;
+      backchannelUrl: string;
+      audience: string;
+      clientId: string;
+      clientSecret: string;
+    };
 export type AssetConfig =
   | { kind: 'firebase' }
   | {
@@ -17,6 +27,7 @@ export type RuntimeConfig = {
   requireScan: boolean;
   ocrProvider: 'local' | 'cloudflare';
   ocrMaxRequests: number;
+  auth: AuthConfig;
   assets: AssetConfig;
   endpoints: Record<string, string>;
   projectId?: string;
@@ -29,6 +40,56 @@ function pattern(value: string, expression: RegExp, code: string): string {
   return value;
 }
 const BUCKET_NAME = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+const LOCAL_SERVICE_HOSTS = ['127.0.0.1', 'localhost', 'keycloak', 'garage'];
+function localServiceUrl(value: string | undefined, code: string, pathname?: RegExp): string {
+  let url: URL;
+  try {
+    url = new URL(value ?? '');
+  } catch {
+    throw new Error(code);
+  }
+  if (
+    url.protocol !== 'http:' ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    !LOCAL_SERVICE_HOSTS.includes(url.hostname) ||
+    (pathname && !pathname.test(url.pathname))
+  )
+    throw new Error(code);
+  return url.href.replace(/\/$/, '');
+}
+function keycloakAuth(env: Record<string, string | undefined>, mode: RuntimeMode): AuthConfig {
+  const provider = env.AUTH_PROVIDER ?? 'firebase';
+  if (provider === 'firebase') return { kind: 'firebase' };
+  if (provider !== 'keycloak') throw new Error('invalid_auth_provider');
+  if (mode === 'cloud') throw new Error('keycloak_auth_not_supported_in_cloud_mode');
+  return {
+    kind: 'keycloak',
+    issuer: localServiceUrl(
+      env.KEYCLOAK_ISSUER,
+      'invalid_keycloak_issuer',
+      /^\/realms\/[A-Za-z0-9-]{1,63}$/,
+    ),
+    backchannelUrl: localServiceUrl(env.KEYCLOAK_BACKCHANNEL_URL, 'invalid_keycloak_backchannel'),
+    audience: pattern(
+      env.KEYCLOAK_AUDIENCE ?? 'lessonbooks-api',
+      /^[A-Za-z0-9._-]{3,64}$/,
+      'invalid_keycloak_audience',
+    ),
+    clientId: pattern(
+      env.KEYCLOAK_CLIENT_ID ?? 'lessonbooks-api',
+      /^[A-Za-z0-9._-]{3,64}$/,
+      'invalid_keycloak_client_id',
+    ),
+    clientSecret: pattern(
+      env.KEYCLOAK_CLIENT_SECRET ?? '',
+      /^[A-Za-z0-9._~+/=-]{16,256}$/,
+      'invalid_keycloak_client_secret',
+    ),
+  };
+}
 function s3Assets(env: Record<string, string | undefined>, mode: RuntimeMode): AssetConfig {
   if (mode === 'cloud') throw new Error('s3_assets_not_supported_in_cloud_mode');
   let endpoint: URL;
@@ -77,10 +138,9 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
   const role: (typeof roles)[number] = selected ?? 'all';
   const assetStore = env.ASSET_STORE ?? 'firebase';
   if (assetStore !== 'firebase' && assetStore !== 's3') throw new Error('invalid_asset_store');
-  const assets: AssetConfig =
-    assetStore === 's3'
-      ? s3Assets(env, env.CLOUD_RUNTIME_APPROVED === 'true' ? 'cloud' : 'emulator')
-      : { kind: 'firebase' };
+  const mode: RuntimeMode = env.CLOUD_RUNTIME_APPROVED === 'true' ? 'cloud' : 'emulator';
+  const assets: AssetConfig = assetStore === 's3' ? s3Assets(env, mode) : { kind: 'firebase' };
+  const auth = keycloakAuth(env, mode);
   let ocrMaxRequests = 0;
   if (ocrProvider === 'cloudflare') {
     // The selectable hosted path is restricted to owned fixtures in the emulator runtime.
@@ -149,6 +209,7 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
       requireScan: env.REQUIRE_SCAN !== 'false',
       ocrProvider,
       ocrMaxRequests,
+      auth,
       assets,
       endpoints: {},
       projectId,
@@ -180,6 +241,7 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
     requireScan: env.REQUIRE_SCAN === 'true',
     ocrProvider,
     ocrMaxRequests,
+    auth,
     assets,
     endpoints,
   };
