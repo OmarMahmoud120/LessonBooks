@@ -92,3 +92,20 @@ route, an audit entry asserted for every admin action, recent-auth enforcement a
 fail-closed behavior when the identity provider is unreachable; Phase B and C add
 their verification entries to milestones. The privacy-review skill applies to every
 admin-surface change before merge, and no phase is complete without it.
+
+## Retention and phase B sequencing (recorded 2026-11-06, same day)
+
+Two follow-up decisions made while implementing phases A and B, recorded here
+because this decision named both as open.
+
+- **Audit retention**: entries are retained for 400 days. Each write lazily prunes
+  expired entries (bounded batch) inside its own transaction, so no sweeper exists
+  and the log cannot grow unbounded even if writes stop. Entries hold operator
+  identities, actions and opaque target identifiers — never child profile content —
+  and the retention window is revisited if operator volume grows enough to matter.
+- **Phase B sequencing**: the original text sequenced ops visibility behind the
+  Postgres cutover because a monitor "would be written twice". The implemented
+  monitor reads and acts only through the storage-agnostic `Repository` interface
+  and `FamilyService` — the same abstractions the family surface uses — so the
+  cutover swaps the driver underneath it without changing the monitor. The cutover
+  still gates the runtime switchover; it no longer gates the monitor code.

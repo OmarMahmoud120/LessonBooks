@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import { DomainError, familyPath, type Job, type Parent, type Usage } from './domain';
 import type { Repository } from './persistence';
 
 // Operator audit log (ADR 0016): one entry per admin action, written before the
 // action is answered. The service exposes only record and list — no update or
-// delete path exists, so the log is append-only by construction.
+// delete path exists, so the log is append-only by construction. Retention is
+// bounded: each write lazily prunes entries older than the window.
 export type AuditEntry = {
   id: string;
   at: string;
@@ -15,6 +17,8 @@ export type AuditEntry = {
 const AUDIT_PATH = 'audit_log';
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 50;
+const RETENTION_DAYS = 400;
+const MAX_PRUNES_PER_WRITE = 200;
 
 export class AuditLog {
   constructor(private repo: Repository) {}
@@ -29,6 +33,12 @@ export class AuditLog {
     };
     await this.repo.atomic(async (tx) => {
       tx.put(`${AUDIT_PATH}/${entry.id}`, entry);
+      const cutoff = new Date(Date.now() - RETENTION_DAYS * 86_400_000).toISOString();
+      const expired = (await tx.list<AuditEntry>(AUDIT_PATH))
+        .filter((candidate) => candidate.at < cutoff)
+        .sort((a, b) => a.at.localeCompare(b.at))
+        .slice(0, MAX_PRUNES_PER_WRITE);
+      for (const stale of expired) tx.delete(`${AUDIT_PATH}/${stale.id}`);
     });
     return entry;
   }
@@ -37,5 +47,118 @@ export class AuditLog {
     const bounded = Math.min(Math.max(Math.floor(limit) || DEFAULT_LIMIT, 1), MAX_LIMIT);
     const entries = await this.repo.list<AuditEntry>(AUDIT_PATH);
     return entries.sort((a, b) => b.at.localeCompare(a.at)).slice(0, bounded);
+  }
+}
+
+// Ops visibility (ADR 0016 phase B): reads and actions run through the same
+// storage-agnostic Repository and FamilyService the family surface uses, so the
+// monitor survives the Postgres cutover unchanged. Job and usage scans iterate
+// families because jobs live under each family's path; the operator UI stays
+// read-only over opaque identifiers.
+export type AdminJobView = {
+  id: string;
+  family_uid: string;
+  kid_id: string;
+  book_id: string;
+  stage: Job['stage'];
+  status: Job['status'];
+  progress: number;
+  attempt: number;
+  manual_retries: number;
+  error_code: string | undefined;
+  created_at: string;
+};
+
+export type UsageTotals = {
+  per_model: {
+    model: string;
+    purpose: Usage['purpose'];
+    calls: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    cost_usd: number;
+  }[];
+  totals: { calls: number; prompt_tokens: number; completion_tokens: number; cost_usd: number };
+};
+
+export class AdminOps {
+  constructor(
+    private repo: Repository,
+    private families: { retryJob(uid: string, jobId: string): Promise<unknown> },
+  ) {}
+
+  private async familyUids(): Promise<string[]> {
+    const parents = await this.repo.list<Parent>('parents');
+    return parents.map((parent) => parent.id);
+  }
+
+  async listJobs(limit: number, status?: Job['status']): Promise<AdminJobView[]> {
+    const bounded = Math.min(Math.max(Math.floor(limit) || DEFAULT_LIMIT, 1), MAX_LIMIT);
+    const all: AdminJobView[] = [];
+    for (const uid of await this.familyUids()) {
+      for (const job of await this.repo.list<Job>(familyPath(uid, 'generation_jobs'))) {
+        if (status && job.status !== status) continue;
+        all.push({
+          id: job.id,
+          family_uid: uid,
+          kid_id: job.kid_id,
+          book_id: job.book_id,
+          stage: job.stage,
+          status: job.status,
+          progress: job.progress,
+          attempt: job.attempt,
+          manual_retries: job.manual_retries ?? 0,
+          error_code: job.error_code,
+          created_at: job.created_at,
+        });
+      }
+    }
+    return all.sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, bounded);
+  }
+
+  async retryJob(jobId: string): Promise<{ retried: true }> {
+    for (const uid of await this.familyUids()) {
+      const job = await this.repo.get<Job>(familyPath(uid, 'generation_jobs', jobId));
+      if (job) {
+        await this.families.retryJob(uid, jobId);
+        return { retried: true };
+      }
+    }
+    throw new DomainError('job_not_found', 404);
+  }
+
+  async usageTotals(): Promise<UsageTotals> {
+    const byKey = new Map<string, UsageTotals['per_model'][number]>();
+    const totals = { calls: 0, prompt_tokens: 0, completion_tokens: 0, cost_usd: 0 };
+    for (const uid of await this.familyUids()) {
+      for (const job of await this.repo.list<Job>(familyPath(uid, 'generation_jobs'))) {
+        for (const usage of job.usage) {
+          const key = `${usage.model}:${usage.purpose}`;
+          const entry = byKey.get(key) ?? {
+            model: usage.model,
+            purpose: usage.purpose,
+            calls: 0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            cost_usd: 0,
+          };
+          entry.calls += 1;
+          entry.prompt_tokens += usage.prompt_tokens;
+          entry.completion_tokens += usage.completion_tokens;
+          entry.cost_usd += usage.cost_usd;
+          byKey.set(key, entry);
+          totals.calls += 1;
+          totals.prompt_tokens += usage.prompt_tokens;
+          totals.completion_tokens += usage.completion_tokens;
+          totals.cost_usd += usage.cost_usd;
+        }
+      }
+    }
+    return {
+      per_model: [...byKey.values()].sort((a, b) =>
+        `${a.model}:${a.purpose}`.localeCompare(`${b.model}:${b.purpose}`),
+      ),
+      totals,
+    };
   }
 }

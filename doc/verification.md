@@ -324,3 +324,35 @@ pass token verification or recent-auth even with the role — the admin surface 
 interactive-login only. The audit log has no retention or export decision yet; that
 must be recorded before any real family data flows through operator tooling. The
 panel UI itself is Phase B, sequenced behind the Postgres cutover per ADR 0016.
+
+## Admin panel phase B — 2026-11-06
+
+Two follow-ups landed the same day. First, the audit-retention decision ADR 0016
+left open: entries are retained 400 days and each write lazily prunes expired ones
+inside its own transaction (bounded batch, no sweeper). Second, the phase B ops
+monitor: `AdminOps` lists generation jobs across families (status filter, bounded
+limit), retries a failed job by locating its family and delegating to the existing
+`FamilyService.retryJob` bounds, and aggregates AI usage per model and purpose from
+the usage records embedded in jobs. Both reads and the retry require the operator
+role and recent authentication and are audited like every admin action. Everything
+runs through the storage-agnostic `Repository` and `FamilyService`, so the
+Postgres cutover swaps the driver underneath without changing the monitor; the
+amendment recorded in ADR 0016 documents why the original sequencing concern does
+not apply. The monitor iterates families because jobs live under each family's
+path — an indexed store-level query is future work if family count ever makes the
+scan measurable.
+
+Tests: 10 new unit tests cover retention pruning in both directions, cross-family
+job listing with stable ordering, status filtering and limits, retry success plus
+409/404 handling, cross-family usage aggregation, and gating on every ops route.
+`npm run check:fast` passes 281 unit tests; lint and typecheck pass.
+
+Live evidence against the Compose stack: `GET /v1/admin/jobs` listed the real jobs
+created by the earlier browser journeys (completed, publish, progress 100),
+`GET /v1/admin/usage` reported 163 mocked-model calls at zero cost, `POST
+/v1/admin/jobs/:id/retry` returned 200 for a genuinely failed job, and the audit
+log recorded every action with the operator identity and parameters; a parent token
+received 403. Direct grants were toggled off afterwards.
+
+Boundary: the panel UI is still unbuilt — the ops surface is API-only. Phase C
+(moderation and support) remains future design.

@@ -4,7 +4,7 @@ import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import { DomainError, familyPath, type Job, type Kid, type LessonRecord } from './domain';
 import { FamilyService } from './family';
-import { AuditLog } from './admin';
+import { AdminOps, AuditLog } from './admin';
 import catalog from '../../doc/curricula/england.json';
 
 // Realm role that marks an operator identity (ADR 0016). Interactive logins only:
@@ -40,6 +40,7 @@ export async function createAPI(
   families: FamilyService,
   verify: (token: string) => Promise<Identity>,
   audit?: AuditLog,
+  ops?: AdminOps,
 ) {
   const app = Fastify({
     logger: false,
@@ -325,38 +326,92 @@ export async function createAPI(
   );
   // Admin surface (ADR 0016): a separate role-gated operator account class. Every
   // admin action is recorded in the append-only audit log before it is answered,
-  // and every check fails closed. Not registered until an audit log is provided.
-  if (audit) {
+  // and every check fails closed. Routes are not registered until the services
+  // they need are provided.
+  if (audit || ops) {
     const adminIdentity = (request: object): Identity => {
       const identity = identities.get(request)!;
       if (!identity.roles?.includes(ADMIN_ROLE)) throw new DomainError('forbidden', 403);
       return identity;
     };
-    app.get<{ Querystring: { limit?: string } }>(
-      '/v1/admin/audit',
-      {
-        schema: {
-          querystring: {
-            type: 'object',
-            properties: { limit: { type: 'string', pattern: '^[0-9]{1,3}$' } },
-            additionalProperties: false,
+    if (audit) {
+      app.get<{ Querystring: { limit?: string } }>(
+        '/v1/admin/audit',
+        {
+          schema: {
+            querystring: {
+              type: 'object',
+              properties: { limit: { type: 'string', pattern: '^[0-9]{1,3}$' } },
+              additionalProperties: false,
+            },
           },
         },
-      },
-      async (request) => {
+        async (request) => {
+          const identity = adminIdentity(request);
+          // Reading the audit log is itself sensitive: it exposes operator activity.
+          await requireRecentAuth(identity);
+          const limit = Number(request.query.limit ?? String(DEFAULT_AUDIT_LIMIT));
+          const entries = await audit.list(limit);
+          await audit.record(
+            'admin.audit.list',
+            identity.uid,
+            `limit=${limit} returned=${entries.length}`,
+          );
+          return { entries };
+        },
+      );
+    }
+    if (ops) {
+      app.get<{ Querystring: { limit?: string; status?: string } }>(
+        '/v1/admin/jobs',
+        {
+          schema: {
+            querystring: {
+              type: 'object',
+              properties: {
+                limit: { type: 'string', pattern: '^[0-9]{1,3}$' },
+                status: { enum: ['queued', 'running', 'completed', 'failed', 'cancelled'] },
+              },
+              additionalProperties: false,
+            },
+          },
+        },
+        async (request) => {
+          const identity = adminIdentity(request);
+          await requireRecentAuth(identity);
+          const limit = Number(request.query.limit ?? String(DEFAULT_AUDIT_LIMIT));
+          const jobs = await ops.listJobs(limit, request.query.status as Job['status']);
+          await audit?.record(
+            'admin.jobs.list',
+            identity.uid,
+            `limit=${limit} status=${request.query.status ?? 'any'} returned=${jobs.length}`,
+          );
+          return { jobs };
+        },
+      );
+      app.post<{ Params: { id: string } }>(
+        '/v1/admin/jobs/:id/retry',
+        { schema: { params: idSchema } },
+        async (request) => {
+          const identity = adminIdentity(request);
+          await requireRecentAuth(identity);
+          const result = await ops.retryJob(request.params.id);
+          await audit?.record('admin.job.retry', identity.uid, `job=${request.params.id}`);
+          return result;
+        },
+      );
+      app.get('/v1/admin/usage', async (request) => {
         const identity = adminIdentity(request);
-        // Reading the audit log is itself sensitive: it exposes operator activity.
         await requireRecentAuth(identity);
-        const limit = Number(request.query.limit ?? String(DEFAULT_AUDIT_LIMIT));
-        const entries = await audit.list(limit);
-        await audit.record(
-          'admin.audit.list',
+        const totals = await ops.usageTotals();
+        await audit?.record(
+          'admin.usage.list',
           identity.uid,
-          `limit=${limit} returned=${entries.length}`,
+          `calls=${totals.totals.calls} cost_usd=${totals.totals.cost_usd}`,
         );
-        return { entries };
-      },
-    );
+        return totals;
+      });
+    }
   }
   return app;
 }
