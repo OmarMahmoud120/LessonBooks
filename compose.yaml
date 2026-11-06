@@ -73,7 +73,10 @@ services:
   # Document store for the self-hosted runtime (ADR 0013 phase 4). Synthetic
   # local-only credentials; a VPS deployment must generate and inject its own.
   postgres:
-    image: postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
+    # Same pinned image as keycloak-db: one Postgres major version to patch and
+    # back up on the VPS. Major-version changes are not in-place; real data needs
+    # a dump/restore migration.
+    image: postgres:17-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac
     init: true
     # The official entrypoint drops from root to the postgres user and fixes
     # ownership of the data volume, so those capabilities are required.
