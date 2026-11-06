@@ -94,6 +94,22 @@ Phase 3: additional launch curricula/languages and remaining five activities.
 Phase 4: parent editing/regeneration UI and expanded moderation/evaluation quality.
 Phase 5: broader markets, game shells and subscriptions.
 
+## VPS migration — 2026-11-06
+
+The user accepted a full no-Google VPS migration in
+[ADR 0013](decisions/0013-self-hosted-vps-deployment-replacing-firebase-and-cloud-tasks.md):
+PostgreSQL, Keycloak, MinIO, polling dispatch, Docker Compose and Caddy. The
+migration is in progress; Firestore, Firebase Auth, Cloud Storage and Cloud Tasks
+remain the active runtime until later phases land.
+
+Phase 1 is implemented but not wired in: `PostgresRepository` covers path reads,
+direct-child listing, serializable transactions and prefix deletion, with 11 tests
+including a `FamilyService` create/delete scenario. Real-PostgreSQL transaction
+verification, adapters for assets, auth, dispatch and client changes remain open.
+No VPS was provisioned, no data was migrated, no Google dependency was removed from
+the running app, and no live model or family-data use is authorized. See
+[vps-migration.md](vps-migration.md).
+
 ## Android native attempt — 2026-11-04
 
 Android CLI 1.1.16717390 built and installed the debug APK on Pixel_8_35
