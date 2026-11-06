@@ -28,9 +28,10 @@ uses an allowlist excluding private books, credentials, environments and native 
 output. Images have no host source mounts. Use `docker compose --env-file /dev/null watch`
 for source edit/rebuild on the running stack.
 
-API: 127.0.0.1:3001. Auth/Firestore/Storage: localhost 9099/8080/9199. Existing web/mobile
-clients use these ports; stop conflicting host services first. The worker exposes
-health only on the private network. All AI is mocked.
+API: 127.0.0.1:3001. Auth/Firestore/Storage: localhost 9099/8080/9199. Garage S3:
+127.0.0.1:3900. Existing web/mobile clients use the Firebase ports; stop conflicting
+host services first. The worker exposes health only on the private network. All AI is
+mocked and private assets are stored in Garage.
 
 The signatures job must finish successfully before worker startup. If the vendor
 CDN rejects updates, startup fails closed. Inspect signatures logs and retry after
@@ -41,8 +42,33 @@ docker compose --env-file /dev/null run --rm signatures
 ```
 
 Emulator exports persist in lessonbooks_emulator-data on graceful shutdown. Scanner
-definitions persist in lessonbooks_scanner-data. Normal down preserves both volumes.
-Removing volumes erases local state; do so only intentionally after review.
+definitions persist in lessonbooks_scanner-data, and private assets persist in
+lessonbooks_garage-data. Normal down preserves all three volumes. Removing volumes
+erases local state; do so only intentionally after review.
+
+## Private asset storage (Garage)
+
+The Compose stack stores uploads, page images and intermediate job files in Garage,
+a self-hosted S3-compatible store. MinIO was the original choice but withdrew its free
+distribution; see [ADR 0014](decisions/0014-garage-replaces-minio-for-private-assets.md).
+
+- The image is pinned by digest (`dxflrs/garage:v2.5.0@sha256:677e…a5a5`).
+- Garage runs `server --single-node --default-bucket` with metadata and data under
+  the `garage-data` volume. Startup creates the layout, access key and private
+  `lessonbooks` bucket; `S3Assets.init()` is idempotent if the bucket already exists.
+- Synthetic development credentials live in `compose.yaml` and can be overridden with
+  `GARAGE_DEFAULT_ACCESS_KEY`, `GARAGE_DEFAULT_SECRET_KEY` and `GARAGE_DEFAULT_BUCKET`.
+  They are local-only and must never be reused on a VPS.
+- The API and worker reach Garage at `http://garage:3900` on the internal network.
+  Only port 3900 is published, to loopback, for verification. The Garage console and
+  admin API are not exposed, no anonymous bucket policy exists, and the API never
+  returns object URLs.
+- `backend/infra/garage.toml` contains a synthetic local RPC secret. A VPS deployment
+  must generate its own secret, access keys and encrypted backups.
+
+The Firebase Storage emulator still runs because Firebase Auth and Firestore remain
+the active runtime; asset writes go to Garage under `ASSET_STORE=s3`. Setting
+`ASSET_STORE=firebase` restores the legacy Cloud Storage adapter for comparison.
 
 ## Runtime image packaging
 
@@ -68,8 +94,12 @@ Do not deploy by setting NODE_ENV=development: that mode accepts emulator tokens
 
 Runtime settings: SERVICE_ROLE api/worker/all (host default all), HOST
 127.0.0.1/0.0.0.0, PORT 1024–65535, REQUIRE_SCAN true/false (Compose worker true).
-Emulator endpoints accept only loopback or the exact Compose emulators service
-with its expected port. Other destinations and live mode fail validation.
+ASSET_STORE firebase/s3 (Compose uses s3); s3 requires S3_ENDPOINT, S3_BUCKET,
+S3_REGION, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY, and currently accepts only
+`http://127.0.0.1:3900`, `http://localhost:3900` or `http://garage:3900`. Unknown or
+missing values fail closed. Emulator endpoints accept only loopback or the exact
+Compose emulators service with its expected port. Other destinations and live mode
+fail validation.
 
 Cloud runtime mode (CLOUD_RUNTIME_APPROVED=true) requires NODE_ENV=production, an
 explicit project, region (residency data), matching Cloud Tasks location and queue,

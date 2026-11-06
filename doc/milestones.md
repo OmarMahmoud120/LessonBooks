@@ -98,20 +98,25 @@ Phase 5: broader markets, game shells and subscriptions.
 
 The user accepted a full no-Google VPS migration in
 [ADR 0013](decisions/0013-self-hosted-vps-deployment-replacing-firebase-and-cloud-tasks.md):
-PostgreSQL, Keycloak, MinIO, polling dispatch, Docker Compose and Caddy. The
+PostgreSQL, Keycloak, S3-compatible storage, polling dispatch, Docker Compose and
+Caddy. MinIO was replaced by Garage because MinIO withdrew its free distribution
+([ADR 0014](decisions/0014-garage-replaces-minio-for-private-assets.md)). The
 migration is in progress; Firestore, Firebase Auth, Cloud Storage and Cloud Tasks
-remain the active runtime until later phases land.
+remain the active document/auth/dispatch runtime until later phases land.
 
 Phase 1 is implemented but not wired in: `PostgresRepository` covers path reads,
 direct-child listing, serializable transactions and prefix deletion, with 11 tests
 including a `FamilyService` create/delete scenario. Phase 2's `S3Assets` adapter is
-also implemented behind the existing `Assets` interface with 6 transport tests for
-private writes, prefix isolation and >1000-object batching; no MinIO service or
-runtime wiring exists yet. Real-PostgreSQL transaction verification, real-MinIO
-verification, Keycloak auth, dispatch and client changes remain open.
-No VPS was provisioned, no data was migrated, no Google dependency was removed from
-the running app, and no live model or family-data use is authorized. See
-[vps-migration.md](vps-migration.md).
+implemented behind the existing `Assets` interface, wired with `ASSET_STORE=s3`, and
+covered by 11 tests for bucket bootstrap, private writes, prefix isolation and
+
+> 1000-object batching. The Compose stack now runs a digest-pinned Garage service with
+> a persistent volume, health check and private default bucket; real put/get/prefix
+> delete and anonymous-access rejection were checked against it. Real-PostgreSQL
+> transaction verification, Keycloak auth, dispatch and client changes remain open.
+> No VPS was provisioned, no data was migrated, no Google dependency was removed from
+> the running app, and no live model or family-data use is authorized. See
+> [vps-migration.md](vps-migration.md).
 
 ## Android native attempt — 2026-11-04
 

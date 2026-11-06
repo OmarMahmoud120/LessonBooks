@@ -1,6 +1,7 @@
 # 0013: Self-hosted VPS deployment replacing Firebase and Cloud Tasks
 
-Status: Accepted; migration in progress
+Status: Accepted; storage vendor superseded by
+[0014](0014-garage-replaces-minio-for-private-assets.md)
 Date: 2026-11-06
 
 ## Context
@@ -46,6 +47,10 @@ The migration is phased: storage/persistence adapters first, then auth, then
 dispatch, then cutover and decommissioning of Google-specific configuration. The
 existing Docker packaging, OCR/scanner worker, schemas, player and mobile bundle are
 retained.
+
+The storage vendor was later changed from MinIO to Garage because MinIO withdrew its
+free distribution; see [ADR 0014](0014-garage-replaces-minio-for-private-assets.md).
+The remaining decision content is unchanged.
 
 ## Consequences
 
