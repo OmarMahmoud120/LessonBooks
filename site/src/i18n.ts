@@ -4,6 +4,8 @@ export const strings = {
     tagline: 'A little book. A world of learning.',
     parentSpace: 'Your family learning space',
     signIn: 'Sign in',
+    signInNotice:
+      'Continue to the secure sign-in page to sign in or create your family account. Your password never reaches this app.',
     signUp: 'Create account',
     email: 'Email address',
     password: 'Password',
@@ -96,7 +98,7 @@ export const strings = {
     deleteAccountConfirm: 'Delete this account and all family data?',
     error: 'Something went wrong. Check your connection and try again.',
     notice: 'Development preview · Mocked lessons · Synthetic content only',
-    localNotice: 'Your work stays in the local Firebase emulators. No paid model calls.',
+    localNotice: 'Your work stays on this local server. No paid model calls.',
     privacy:
       'Profiles contain a nickname, age band, curriculum and language. Books and lessons belong only to your family. You can delete the profile or account below.',
     noProgress: 'This is a parent preview. Progress is not saved.',
@@ -120,6 +122,8 @@ export const strings = {
     tagline: 'كتاب صغير وعالم من التعلم',
     parentSpace: 'مساحة تعلم الأسرة',
     signIn: 'تسجيل الدخول',
+    signInNotice:
+      'سجّل الدخول بحساب الأسرة. تُدار كلمة المرور في صفحة الدخول ولا تُرسل إلى هذا التطبيق.',
     signUp: 'إنشاء حساب',
     email: 'البريد الإلكتروني',
     password: 'كلمة المرور',
@@ -210,7 +214,7 @@ export const strings = {
     deleteAccountConfirm: 'هل تريد حذف الحساب وجميع بيانات الأسرة؟',
     error: 'حدث خطأ. تحقق من الاتصال وحاول مرة أخرى.',
     notice: 'معاينة تطوير · دروس تجريبية · بيانات اصطناعية فقط',
-    localNotice: 'تبقى بياناتك في المحاكيات المحلية.',
+    localNotice: 'تبقى بياناتك على هذا الخادم المحلي.',
     privacy:
       'يتضمن الملف اسماً مستعاراً وفئة عمرية ومنهجاً ولغة. الكتب والدروس خاصة بأسرتك. يمكنك حذف البيانات.',
     noProgress: 'هذه معاينة لولي الأمر. لا يتم حفظ التقدم.',

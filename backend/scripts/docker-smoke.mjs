@@ -2,20 +2,82 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { GetObjectCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
 const base = 'http://127.0.0.1:3001/v1';
-const authURL =
-  'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-lessonbooks';
-const signup = await fetch(authURL, {
+// Synthetic local Keycloak credentials from compose.yaml and the realm import.
+// None of these values are valid on a VPS.
+const keycloak = process.env.KEYCLOAK_PUBLIC_URL ?? 'http://127.0.0.1:8081';
+const realm = 'lessonbooks';
+const adminUser = process.env.KEYCLOAK_ADMIN_USERNAME ?? 'local-admin';
+const adminPassword = process.env.KEYCLOAK_ADMIN_PASSWORD ?? 'local-only-keycloak-admin';
+const syntheticPassword = 'SyntheticDocker2026';
+const email = `docker-${Date.now()}@example.test`;
+const username = `docker${Date.now()}`;
+
+async function form(url, data) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(data),
+    signal: AbortSignal.timeout(15000),
+  });
+  return { status: response.status, body: await response.json().catch(() => ({})) };
+}
+const adminLogin = await form(`${keycloak}/realms/master/protocol/openid-connect/token`, {
+  grant_type: 'password',
+  client_id: 'admin-cli',
+  username: adminUser,
+  password: adminPassword,
+});
+assert.equal(adminLogin.status, 200, 'bootstrap admin must be able to sign in');
+const adminToken = adminLogin.body.access_token;
+
+async function admin(path, init = {}) {
+  const response = await fetch(`${keycloak}/admin/realms/${realm}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${adminToken}`,
+      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      ...init.headers,
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  return response;
+}
+
+const siteClient = (await (await admin('/clients?clientId=lessonbooks-site')).json())[0];
+assert.ok(siteClient?.id, 'the website client must exist');
+async function setDirectGrants(enabled) {
+  const response = await admin(`/clients/${siteClient.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ directAccessGrantsEnabled: enabled }),
+  });
+  assert.ok(response.ok, 'the test must be able to toggle the local password grant');
+}
+// The website uses authorization-code + PKCE. The password grant is enabled only
+// for this scripted journey and turned off again in the finally block.
+await setDirectGrants(true);
+const created = await admin('/users', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    email: `docker-${Date.now()}@example.test`,
-    password: 'SyntheticDocker2026',
-    returnSecureToken: true,
+    username,
+    email,
+    emailVerified: true,
+    enabled: true,
+    firstName: 'Docker',
+    lastName: 'Parent',
+    credentials: [{ type: 'password', value: syntheticPassword, temporary: false }],
   }),
 });
-assert.equal(signup.status, 200);
-const { idToken } = await signup.json();
-const uid = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64url').toString()).user_id;
+assert.equal(created.status, 201, 'a synthetic parent identity is created');
+const grant = await form(`${keycloak}/realms/${realm}/protocol/openid-connect/token`, {
+  grant_type: 'password',
+  client_id: 'lessonbooks-site',
+  username,
+  password: syntheticPassword,
+  scope: 'openid',
+});
+assert.equal(grant.status, 200, 'the synthetic parent receives a token');
+let idToken = grant.body.access_token;
+const uid = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64url').toString()).sub;
 assert.ok(uid);
 // The Compose stack stores assets in Garage. These are the local synthetic
 // credentials from compose.yaml, not a supported production configuration.
@@ -65,6 +127,19 @@ async function waitForEmptyPrefix(prefix) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   assert.fail(`objects remain under ${prefix}`);
+}
+// Recent-auth endpoints need a session younger than five minutes. Re-authenticating
+// here exercises the real re-login path after a long OCR journey.
+async function signInAgain() {
+  const refreshed = await form(`${keycloak}/realms/${realm}/protocol/openid-connect/token`, {
+    grant_type: 'password',
+    client_id: 'lessonbooks-site',
+    username,
+    password: syntheticPassword,
+    scope: 'openid',
+  });
+  assert.equal(refreshed.status, 200, 'the parent can sign in again');
+  idToken = refreshed.body.access_token;
 }
 async function api(path, options = {}) {
   const response = await fetch(base + path, {
@@ -146,9 +221,19 @@ try {
   await waitForEmptyPrefix(`families/${uid}/kids/${arabicKid.id}/`);
   assert.equal((await api('/lessons')).length, 0);
   console.log(
-    'Docker smoke passed: auth, consent, owned PDFs, virus-scanned ingestion, Arabic OCR by a separate worker, mocked Arabic lessons, approval, deletion, and private Garage objects.',
+    'Docker smoke passed: Keycloak token, consent, owned PDFs, virus-scanned ingestion, Arabic OCR by a separate worker, mocked Arabic lessons, approval, deletion, and private Garage objects.',
   );
 } finally {
+  await signInAgain();
   await api('/account', { method: 'DELETE' });
   await waitForEmptyPrefix(`families/${uid}/`);
+  // Account deletion cascades to the identity that owns the family.
+  const lookup = await admin(`/users?username=${encodeURIComponent(username)}`);
+  const remaining = await lookup.json();
+  assert.ok(
+    Array.isArray(remaining) && remaining.length === 0,
+    'the Keycloak identity must be deleted with the family',
+  );
+  console.log('Keycloak identity removed with the family');
+  await setDirectGrants(false);
 }

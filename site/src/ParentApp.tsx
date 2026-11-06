@@ -1,15 +1,6 @@
 import { useEffect, useState } from 'react';
-import { initializeApp } from 'firebase/app';
-import {
-  getAuth,
-  connectAuthEmulator,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  type User,
-} from 'firebase/auth';
 import { assertLesson, type Lesson } from '@lessonbooks/contracts';
+import { accessToken, loadSession, signIn, signOut, userManager, type ParentSession } from './auth';
 import { Player } from './player/Player';
 import { strings } from './i18n';
 import {
@@ -24,13 +15,6 @@ import {
 import './parent.css';
 
 const t = strings.en;
-const firebase = initializeApp({
-  apiKey: 'demo-lessonbooks',
-  projectId: 'demo-lessonbooks',
-  authDomain: 'demo-lessonbooks.firebaseapp.com',
-});
-const auth = getAuth(firebase);
-connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
 type Kid = { id: string; nickname: string; grade_id: string };
 type Summary = {
   id: string;
@@ -47,9 +31,7 @@ type Job = {
   error: string | null;
 };
 export function ParentApp() {
-  const [user, setUser] = useState<User | null>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [user, setUser] = useState<ParentSession | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [kids, setKids] = useState<Kid[]>([]);
@@ -100,35 +82,54 @@ export function ParentApp() {
   const cachedKidLessons = selectedKid
     ? loadCachedKidLessons().filter((lesson) => lesson.kid_id === selectedKid.id)
     : [];
-  useEffect(
-    () =>
-      onAuthStateChanged(auth, (current) => {
-        setUser(current);
-        setKids([]);
-        setLessons([]);
-        setOpened(null);
-        setJob(null);
-        setConsented(false);
-        setUnlocked(false);
-        sessionStorage.removeItem('lessonbooks-parent-unlocked');
-        setKidView(false);
-        setPinFormOpen(false);
-        setPinInput('');
-        setAssignments([]);
-        setProgress(null);
-        setSelectedKidId(null);
-        setAddingKid(false);
-        setFile(null);
-        setUploadKey('');
-        setError('');
-        setNickname('');
-      }),
-    [],
-  );
+  function clearFamilyState() {
+    setKids([]);
+    setLessons([]);
+    setOpened(null);
+    setJob(null);
+    setConsented(false);
+    setUnlocked(false);
+    sessionStorage.removeItem('lessonbooks-parent-unlocked');
+    setKidView(false);
+    setPinFormOpen(false);
+    setPinInput('');
+    setAssignments([]);
+    setProgress(null);
+    setSelectedKidId(null);
+    setAddingKid(false);
+    setFile(null);
+    setUploadKey('');
+    setError('');
+    setNickname('');
+  }
+  useEffect(() => {
+    let active = true;
+    void loadSession()
+      .then((session) => {
+        if (!active) return;
+        setUser(session);
+        if (session) void refresh().catch(() => setError(t.error));
+      })
+      .catch(() => setError(t.error));
+    const onLoaded = () => void loadSession().then((session) => active && setUser(session));
+    const onUnloaded = () => {
+      if (!active) return;
+      setUser(null);
+      clearFamilyState();
+    };
+    userManager.events.addUserLoaded(onLoaded);
+    userManager.events.addUserUnloaded(onUnloaded);
+    return () => {
+      active = false;
+      userManager.events.removeUserLoaded(onLoaded);
+      userManager.events.removeUserUnloaded(onUnloaded);
+    };
+  }, []);
   async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-    if (!auth.currentUser) throw new Error('signed_out');
+    const token = await accessToken();
+    if (!token) throw new Error('signed_out');
     const headers = new Headers(init.headers);
-    headers.set('Authorization', `Bearer ${await auth.currentUser.getIdToken()}`);
+    headers.set('Authorization', `Bearer ${token}`);
     if (init.body && !(init.body instanceof FormData))
       headers.set('Content-Type', 'application/json');
     const response = await fetch(`http://127.0.0.1:3001/v1${path}`, {
@@ -140,13 +141,13 @@ export function ParentApp() {
     return response.json() as Promise<T>;
   }
   async function refresh() {
-    const owner = auth.currentUser?.uid;
+    const owner = user?.uid;
     const family = await api<{
       kids: Kid[];
       consents: { type: string }[];
       pin_set: boolean;
     }>('/family');
-    if (!owner || owner !== auth.currentUser?.uid) return;
+    if (!owner || owner !== user?.uid) return;
     setKids(family.kids);
     setPinSet(family.pin_set);
     if (!family.kids.some((kid) => kid.id === selectedKidId))
@@ -155,7 +156,7 @@ export function ParentApp() {
       ['privacy', 'content_rights'].every((type) => family.consents.some((c) => c.type === type)),
     );
     const summaries = await api<Summary[]>('/lessons');
-    if (owner === auth.currentUser?.uid) {
+    if (owner === user?.uid && user) {
       setLessons(summaries);
       cacheKidLessons(summaries as CachedSummary[]);
     }
@@ -163,8 +164,8 @@ export function ParentApp() {
       await api<{ id: string; kid_id: string; lesson_id: string; revision: number }[]>(
         '/assignments',
       );
-    if (owner === auth.currentUser?.uid) setAssignments(list);
-    if (owner === auth.currentUser?.uid && selectedKidId) {
+    if (owner === user?.uid) setAssignments(list);
+    if (owner === user?.uid && selectedKidId) {
       setProgress(await api(`/kids/${selectedKidId}/progress`));
     } else setProgress(null);
   }
@@ -217,8 +218,7 @@ export function ParentApp() {
       value = { lesson: cached, revision: record.revision, status: record.status };
     }
     assertLesson(value.lesson);
-    if (auth.currentUser?.uid === user?.uid && user)
-      setOpened({ ...value, lesson: value.lesson, owner_uid: user.uid });
+    if (user && user.uid) setOpened({ ...value, lesson: value.lesson, owner_uid: user.uid });
   }
   const assignedForKid = (lessonId: string) =>
     assignments.some((a) => a.kid_id === selectedKid?.id && a.lesson_id === lessonId);
@@ -324,7 +324,7 @@ export function ParentApp() {
           <span aria-hidden="true">✳</span> {t.brand}
         </a>
         <span className="edition">{t.parentSpace}</span>
-        {user && <button onClick={() => void signOut(auth)}>{t.signOut}</button>}
+        {user && <button onClick={() => void signOut()}>{t.signOut}</button>}
       </header>
       <div className="development-notice">{t.notice}</div>
       {error && (
@@ -354,49 +354,18 @@ export function ParentApp() {
               </a>
             </div>
           </section>
-          <form
-            className="parent-card auth-card"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void perform(() => signInWithEmailAndPassword(auth, email, password));
-            }}
-          >
-            <h2>{t.signIn}</h2>
-            <label>
-              {t.email}
-              <input
-                autoComplete="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </label>
-            <label>
-              {t.password}
-              <input
-                autoComplete="current-password"
-                type="password"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </label>
-            <button className="primary" disabled={busy}>
+          <section className="parent-card auth-card" aria-labelledby="signin-heading">
+            <h2 id="signin-heading">{t.signIn}</h2>
+            <p className="small">{t.signInNotice}</p>
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={() => void perform(() => signIn())}
+            >
               {t.signIn}
             </button>
-            <button
-              type="button"
-              disabled={busy || !email || password.length < 8}
-              onClick={() =>
-                void perform(() => createUserWithEmailAndPassword(auth, email, password))
-              }
-            >
-              {t.signUp}
-            </button>
             <p className="small">{t.localNotice}</p>
-          </form>
+          </section>
         </main>
       ) : (
         <main className="dashboard">
@@ -850,7 +819,7 @@ export function ParentApp() {
               if (confirm(t.deleteAccountConfirm))
                 void perform(async () => {
                   await api('/account', { method: 'DELETE' });
-                  await signOut(auth);
+                  await signOut();
                 });
             }}
           >

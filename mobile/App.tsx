@@ -11,29 +11,14 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { initializeApp } from 'firebase/app';
-import {
-  initializeAuth,
-  inMemoryPersistence,
-  connectAuthEmulator,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  type User,
-} from 'firebase/auth';
 import * as DocumentPicker from 'expo-document-picker';
+import { accessToken, signIn, signOut, subscribe, type ParentSession } from './src/auth';
 import { uploadCopies } from './src/nativeUploadCopies';
 import { assertLesson, type Lesson } from '@lessonbooks/contracts';
 import { LessonPreview } from './src/LessonPreview';
 import { strings } from '../site/src/i18n';
 const host = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
 // This synthetic preview intentionally signs out when the native process ends.
-const auth = initializeAuth(
-  initializeApp({ apiKey: 'demo-lessonbooks', projectId: 'demo-lessonbooks' }),
-  { persistence: inMemoryPersistence },
-);
-connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
 const t = strings.en;
 type Summary = {
   id: string;
@@ -64,9 +49,7 @@ export default function App() {
 }
 
 function ParentPreview() {
-  const [user, setUser] = useState<User | null>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [user, setUser] = useState<ParentSession | null>(null);
   const [nickname, setNickname] = useState('');
   const [kid, setKid] = useState<{ id: string; nickname: string } | null>(null);
   const [kidsList, setKidsList] = useState<{ id: string; nickname: string }[]>([]);
@@ -98,7 +81,7 @@ function ParentPreview() {
   const [uploadKey, setUploadKey] = useState('');
   const [busy, setBusy] = useState(false);
   async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = await auth.currentUser?.getIdToken();
+    const token = await accessToken();
     if (!token) throw new Error('signed_out');
     const response = await fetch(`http://${host}:3001/v1${path}`, {
       ...init,
@@ -118,13 +101,13 @@ function ParentPreview() {
     return response.json() as Promise<T>;
   }
   async function refresh() {
-    const owner = auth.currentUser?.uid;
+    const owner = user?.uid;
     const family = await api<{
       kids: { id: string; nickname: string }[];
       consents: { type: string }[];
       pin_set: boolean;
     }>('/family');
-    if (!owner || owner !== auth.currentUser?.uid) return;
+    if (!owner || owner !== user?.uid) return;
     setPinSet(family.pin_set);
     setKidsList(family.kids);
     setKid((current) => family.kids.find((k) => k.id === current?.id) ?? family.kids[0] ?? null);
@@ -132,10 +115,10 @@ function ParentPreview() {
       ['privacy', 'content_rights'].every((type) => family.consents.some((c) => c.type === type)),
     );
     const summaries = await api<Summary[]>('/lessons');
-    if (owner !== auth.currentUser?.uid) return;
+    if (owner !== user?.uid) return;
     setLessons(summaries);
     const list = await api<Assignment[]>('/assignments');
-    if (owner !== auth.currentUser?.uid) return;
+    if (owner !== user?.uid) return;
     setAssignments(list);
     const selected = family.kids.find((k) => k.id === kid?.id) ?? family.kids[0];
     if (selected) setProgress(await api(`/kids/${selected.id}/progress`));
@@ -168,7 +151,7 @@ function ParentPreview() {
   }, []);
   useEffect(
     () =>
-      onAuthStateChanged(auth, (current) => {
+      subscribe((current) => {
         setUser(current);
         clearTransient();
         setKid(null);
@@ -327,35 +310,8 @@ function ParentPreview() {
         {!user ? (
           <>
             <Text style={styles.heading}>{t.signIn}</Text>
-            <Text>{t.email}</Text>
-            <TextInput
-              accessibilityLabel={t.email}
-              style={styles.input}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              value={email}
-              onChangeText={setEmail}
-            />
-            <Text>{t.password}</Text>
-            <TextInput
-              accessibilityLabel={t.password}
-              style={styles.input}
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-            <Button
-              title={t.signIn}
-              disabled={busy}
-              onPress={() => void perform(() => signInWithEmailAndPassword(auth, email, password))}
-            />
-            <Button
-              title={t.signUp}
-              disabled={busy}
-              onPress={() =>
-                void perform(() => createUserWithEmailAndPassword(auth, email, password))
-              }
-            />
+            <Text>{t.signInNotice}</Text>
+            <Button title={t.signIn} disabled={busy} onPress={() => void perform(signIn)} />
           </>
         ) : (
           <>
@@ -363,7 +319,7 @@ function ParentPreview() {
               title={t.signOut}
               onPress={() => {
                 clearTransient();
-                void signOut(auth);
+                signOut();
               }}
             />
             {!consent ? (
@@ -505,7 +461,7 @@ function ParentPreview() {
                               status: string;
                             }>(`/lessons/${lesson.id}`);
                             assertLesson(value.lesson);
-                            if (auth.currentUser?.uid === user?.uid && user)
+                            if (user && user.uid)
                               setOpened({ ...value, lesson: value.lesson, owner_uid: user.uid });
                           })
                         }
@@ -577,14 +533,13 @@ function ParentPreview() {
                   onPress={() =>
                     void perform(() =>
                       uploadCopies.run(async () => {
-                        const owner = auth.currentUser?.uid;
+                        const owner = user?.uid;
                         const chosen = await DocumentPicker.getDocumentAsync({
                           type: 'application/pdf',
                           copyToCacheDirectory: true,
                         });
                         if (chosen.canceled) return;
-                        if (!owner || auth.currentUser?.uid !== owner)
-                          throw new Error('signed_out');
+                        if (!owner || user?.uid !== owner) throw new Error('signed_out');
                         const file = chosen.assets[0]!;
                         const key = `mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`;
                         setUploadAsset({ uri: file.uri, name: 'book.pdf' });
@@ -634,7 +589,7 @@ function ParentPreview() {
                                 status: string;
                               }>(`/lessons/${lesson.id}`);
                               assertLesson(value.lesson);
-                              if (auth.currentUser?.uid === user?.uid && user)
+                              if (user && user.uid)
                                 setOpened({ ...value, lesson: value.lesson, owner_uid: user.uid });
                             })
                           }
@@ -702,7 +657,7 @@ function ParentPreview() {
                     onPress: () =>
                       void perform(async () => {
                         await api('/account', { method: 'DELETE' });
-                        await signOut(auth);
+                        signOut();
                       }),
                   },
                 ])
