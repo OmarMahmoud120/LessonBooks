@@ -48,20 +48,3 @@ RUN node fetch-tessdata.mjs /usr/share/tesseract-ocr/5/tessdata && rm fetch-tess
 COPY backend/infra/freshclam.conf /app/freshclam.conf
 ENV SERVICE_ROLE=worker OMP_THREAD_LIMIT=1
 USER node
-
-FROM eclipse-temurin:21-jre-jammy@sha256:1eac8b8fee11ca7d6725a48bc5d41992ed1561504ebae25490d2d062847e8269 AS java
-FROM dependencies AS emulators
-USER root
-COPY --from=java /opt/java/openjdk /opt/java/openjdk
-ENV JAVA_HOME=/opt/java/openjdk PATH=/opt/java/openjdk/bin:$PATH FIREBASE_CLI_DISABLE_UPDATE_CHECK=1
-RUN mkdir -p /data /home/node/.cache/firebase/emulators && chown -R node:node /data /home/node/.cache
-COPY backend/infra/firestore.rules backend/infra/storage.rules backend/infra/
-COPY backend/infra/firebase.docker.json ./firebase.json
-COPY backend/infra/emulator-health.mjs ./emulator-health.mjs
-COPY backend/infra/start-emulators.sh ./start-emulators.sh
-USER node
-RUN node_modules/.bin/firebase setup:emulators:firestore && node_modules/.bin/firebase setup:emulators:storage
-EXPOSE 9099 8080 9199
-HEALTHCHECK --interval=5s --timeout=5s --start-period=30s CMD ["node", "/app/emulator-health.mjs"]
-WORKDIR /data
-CMD ["sh", "/app/start-emulators.sh"]

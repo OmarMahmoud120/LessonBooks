@@ -21,7 +21,7 @@ export function createRuntimeIngestor(
   if (config.ocrProvider === 'local' || config.role === 'api')
     return new PDFIngestor(config.requireScan, run);
   // Defense in depth for callers constructing RuntimeConfig directly rather than parsing env.
-  if (config.mode !== 'emulator' || env.CLOUDFLARE_OCR_APPROVED !== 'true')
+  if (env.CLOUDFLARE_OCR_APPROVED !== 'true')
     throw new DomainError('ocr_runtime_not_approved', 503);
   if (
     !Number.isInteger(config.ocrMaxRequests) ||

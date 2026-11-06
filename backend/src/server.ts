@@ -1,11 +1,6 @@
 import Fastify from 'fastify';
 import { Pool } from 'pg';
 import { runtimeConfig } from './runtime-config';
-import { initializeApp, type App } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
-import { getStorage } from 'firebase-admin/storage';
-import { FirestoreRepository, StorageAssets, type Assets, type Repository } from './persistence';
 import { PostgresRepository } from './persistence-postgres';
 import { S3Assets, createS3Transport } from './persistence-s3';
 import { KeycloakAdmin, KeycloakTokens } from './auth-keycloak';
@@ -16,102 +11,36 @@ import { Pipeline } from './pipeline';
 import { createRuntimeIngestor } from './runtime-ingestor';
 import { MockModelClient, RoutedAI, mockPolicy } from './ai';
 import { familyPath, type Parent, type Job } from './domain';
-import { CloudTasksOidcVerifier, createWorkerApp } from './worker';
-import { CloudTasksPublisher, OutboxSweeper } from './transport';
 
-// Emulator mode keeps the local polling worker; cloud mode dispatches via Cloud Tasks.
+// Self-hosted runtime (ADR 0013): Postgres documents, Keycloak identity, Garage
+// assets and a local polling worker. AI stays mocked until live use is approved.
 const config = runtimeConfig(process.env);
 const ingestor = createRuntimeIngestor(config, process.env);
-// The self-hosted runtime (Postgres + Garage + Keycloak, ADR 0013 phase 4) needs no
-// Firebase at all; the GCP runtime still initializes it for Firestore, Storage and Auth.
-const firebaseNeeded =
-  config.repository === 'firestore' ||
-  config.auth.kind === 'firebase' ||
-  config.assets.kind === 'firebase';
-const firebase: App | undefined = firebaseNeeded
-  ? initializeApp({
-      projectId: config.mode === 'cloud' ? config.projectId! : 'demo-lessonbooks',
-      storageBucket: `${config.mode === 'cloud' ? config.projectId! : 'demo-lessonbooks'}.appspot.com`,
-    })
-  : undefined;
-Object.assign(process.env, config.endpoints);
-// Firestore still stores family documents in both modes; identity moves to Keycloak
-// when AUTH_PROVIDER=keycloak. The Firebase user-deletion hook is only used by Firebase.
-const firebaseAuth = config.auth.kind === 'firebase' ? getAuth(firebase!) : undefined;
-const keycloak =
-  config.auth.kind === 'keycloak'
-    ? {
-        admin: new KeycloakAdmin(config.auth),
-        tokens: new KeycloakTokens(config.auth, new KeycloakAdmin(config.auth)),
-      }
-    : undefined;
-const verifyToken = keycloak
-  ? (token: string) => keycloak.tokens.verify(token)
-  : async (token: string) => {
-      const identity = await firebaseAuth!.verifyIdToken(token, true);
-      return { uid: identity.uid, auth_time: identity.auth_time };
-    };
-let repo: Repository;
-if (config.repository === 'postgres') {
-  const pool = new Pool({ connectionString: config.postgres!.url, max: 10 });
-  repo = new PostgresRepository(pool);
-  await (repo as PostgresRepository).init();
-} else {
-  repo = new FirestoreRepository(getFirestore(firebase!));
-}
-let assets: Assets;
-if (config.assets.kind === 's3') {
-  const s3 = new S3Assets(createS3Transport(config.assets), config.assets.bucket);
-  await s3.init();
-  assets = s3;
-} else {
-  assets = new StorageAssets(getStorage(firebase!).bucket());
-}
-const families = new FamilyService(repo, assets, async (uid) => {
-  if (keycloak) {
-    await keycloak.admin.deleteUser(uid);
-    return;
-  }
-  try {
-    await firebaseAuth!.deleteUser(uid);
-  } catch (error) {
-    if ((error as { code?: string }).code !== 'auth/user-not-found') throw error;
-  }
-});
+const keycloak = {
+  admin: new KeycloakAdmin(config.auth),
+  tokens: new KeycloakTokens(config.auth, new KeycloakAdmin(config.auth)),
+};
+const verifyToken = (token: string) => keycloak.tokens.verify(token);
+const pool = new Pool({ connectionString: config.postgres.url, max: 10 });
+const repo = new PostgresRepository(pool);
+await repo.init();
+const assets = new S3Assets(createS3Transport(config.assets), config.assets.bucket);
+await assets.init();
+const families = new FamilyService(repo, assets, (uid) => keycloak.admin.deleteUser(uid));
 const pipeline = new Pipeline(families, ingestor, new RoutedAI(new MockModelClient(), mockPolicy));
 const audit = new AuditLog(repo);
-// Deletion verification asks the identity provider directly; both providers can
-// answer whether a uid still exists, and neither result is cached here.
-const identityExists = keycloak
-  ? (uid: string) => keycloak.admin.userExists(uid)
-  : firebaseAuth
-    ? async (uid: string) => {
-        try {
-          await firebaseAuth!.getUser(uid);
-          return true;
-        } catch (error) {
-          if ((error as { code?: string }).code === 'auth/user-not-found') return false;
-          throw error;
-        }
-      }
-    : undefined;
+// Deletion verification asks the identity provider directly; the result is never cached here.
+const identityExists = (uid: string) => keycloak.admin.userExists(uid);
 const ops = new AdminOps(repo, families, identityExists);
 const app =
-  config.mode === 'cloud' && config.role === 'worker'
-    ? createWorkerApp(
-        pipeline,
-        new CloudTasksOidcVerifier(config.workerUrl!, config.workerServiceAccount!),
-      )
-    : config.mode === 'cloud' && config.role === 'api'
-      ? await createAPI(families, verifyToken, audit, ops, config.limits)
-      : config.role === 'worker'
-        ? Fastify({ logger: false })
-        : await createAPI(families, verifyToken, audit, ops, config.limits);
-if (config.role === 'worker' && config.mode === 'emulator')
+  config.role === 'worker'
+    ? Fastify({ logger: false })
+    : await createAPI(families, verifyToken, audit, ops, config.limits);
+if (config.role === 'worker')
   app.get('/health', async () => ({ status: 'ok', mode: 'mock-worker' }));
 let running = false;
 const worker =
-  config.mode === 'cloud' || config.role === 'api'
+  config.role === 'api'
     ? undefined
     : setInterval(async () => {
         if (running) return;
@@ -137,34 +66,8 @@ const worker =
           running = false;
         }
       }, 1500);
-// Cloud API instances recover lost dispatch; Cloud Tasks carries every fresh enqueue.
-let sweeping = false;
-const sweeper =
-  config.mode === 'cloud' && config.role === 'api'
-    ? setInterval(async () => {
-        if (sweeping) return;
-        sweeping = true;
-        try {
-          const { CloudTasksClient } = await import('@google-cloud/tasks');
-          await new OutboxSweeper(
-            repo,
-            new CloudTasksPublisher(
-              new CloudTasksClient(),
-              config.queuePath!,
-              config.workerUrl!,
-              config.workerServiceAccount!,
-            ),
-          ).sweep();
-        } catch (error) {
-          console.error('outbox_sweep_failed', error);
-        } finally {
-          sweeping = false;
-        }
-      }, 60000)
-    : undefined;
 app.addHook('onClose', async () => {
   if (worker) clearInterval(worker);
-  if (sweeper) clearInterval(sweeper);
 });
 for (const signal of ['SIGINT', 'SIGTERM'] as const)
   process.once(signal, () => {
@@ -172,9 +75,5 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const)
   });
 await app.listen({ port: config.port, host: config.host });
 console.log(
-  `LessonBooks ${config.mode} ${config.role}: port ${config.port}; OCR=${config.role === 'api' ? 'unused' : config.ocrProvider} (${
-    config.mode === 'cloud'
-      ? 'mocked AI; live provider remains gated'
-      : 'emulators + mocked AI; synthetic content only'
-  })`,
+  `LessonBooks ${config.mode} ${config.role}: port ${config.port}; OCR=${config.role === 'api' ? 'unused' : config.ocrProvider} (Postgres + Keycloak + Garage; mocked AI; synthetic content only)`,
 );

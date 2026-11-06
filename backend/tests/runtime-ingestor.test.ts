@@ -108,7 +108,4 @@ it('fails on missing credentials at worker startup and leaves API-only instances
   expect(() =>
     createRuntimeIngestor(runtimeConfig({ OCR_PROVIDER: 'cloudflare', SERVICE_ROLE: 'api' }), {}),
   ).not.toThrow();
-  expect(() =>
-    createRuntimeIngestor({ ...runtimeConfig(approved), mode: 'cloud' }, approved),
-  ).toThrow('ocr_runtime_not_approved');
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CloudTasksPublisher, OutboxSweeper, type TaskPublisher } from '../src/transport';
+import { type TaskPublisher } from '../src/transport';
 import { FamilyService } from '../src/family';
 import { MemoryRepository, MemoryAssets } from '../src/persistence';
 import { Pipeline } from '../src/pipeline';
@@ -86,68 +86,5 @@ describe('task dispatch', () => {
     expect(tokens[6]).toBe('validate:0:6');
     const job = await repo.get<Job>(familyPath('alice', 'generation_jobs', job_id));
     expect(job?.status).toBe('completed');
-  });
-  it('sweeps outbox, stalled leases and due retries with distinct tokens', async () => {
-    const publisher = new RecordingPublisher();
-    const { repo, family, kid } = await setupFamily(publisher);
-    const { job_id } = await family.upload(
-      'alice',
-      kid.id,
-      Buffer.from('%PDF-1.7 synthetic'),
-      'sweep-key-0001',
-    );
-    // Simulate a lost dispatch: the outbox flag survived without a task.
-    const now = Date.now();
-    await repo.atomic(async (tx) => {
-      const job = await tx.get<Job>(familyPath('alice', 'generation_jobs', job_id));
-      tx.put(familyPath('alice', 'generation_jobs', job_id), {
-        ...job!,
-        status: 'running',
-        attempt: 1,
-        fence: 1,
-        lease_until: now - 1000,
-        outbox_pending: false,
-      });
-    });
-    const sweeper = new OutboxSweeper(repo, publisher, () => now);
-    expect(await sweeper.sweep()).toBe(1);
-    expect(publisher.calls.at(-1)).toEqual({ uid: 'alice', jobId: job_id, token: 'ingest:1:1:r' });
-    // Repeating the sweep before a claim keeps the deterministic token (dedupe-safe).
-    expect(await sweeper.sweep()).toBe(1);
-    expect(publisher.calls.at(-1)).toEqual(publisher.calls.at(-2));
-  });
-});
-describe('cloud tasks publisher', () => {
-  it('builds deterministic idempotent task names with OIDC identity', async () => {
-    const created: Record<string, unknown>[] = [];
-    const client = {
-      createTask: async (request: { parent: string; task: Record<string, unknown> }) => {
-        created.push(request.task);
-      },
-    };
-    const publisher = new CloudTasksPublisher(
-      client as never,
-      'projects/p/locations/europe-west6/queues/q',
-      'https://worker.example.run.app',
-      'worker@p.iam.gserviceaccount.com',
-    );
-    await publisher.enqueue('uid-1', 'job-1', 'ingest:0:0');
-    await publisher.enqueue('uid-1', 'job-1', 'ingest:0:0');
-    await publisher.enqueue('uid-1', 'job-1', 'structure:1:2:r');
-    expect(created).toHaveLength(3);
-    expect(created[0]).toMatchObject({
-      name: 'projects/p/locations/europe-west6/queues/q/tasks/uid-1-job-1-ingest_0_0',
-      httpRequest: {
-        url: 'https://worker.example.run.app/v1/internal/jobs/uid-1/job-1',
-        httpMethod: 'POST',
-        oidcToken: {
-          serviceAccountEmail: 'worker@p.iam.gserviceaccount.com',
-          audience: 'https://worker.example.run.app',
-        },
-      },
-    });
-    expect(created[2]).toMatchObject({
-      name: 'projects/p/locations/europe-west6/queues/q/tasks/uid-1-job-1-structure_1_2_r',
-    });
   });
 });

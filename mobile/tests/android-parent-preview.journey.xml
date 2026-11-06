@@ -1,5 +1,5 @@
 <journey name="Android parent-to-lesson preview">
-  <description>Use only the test emulator, local Firebase emulators, mocked AI, a synthetic account and the repository-authored counting PDF.</description>
+  <description>Use only the test emulator, the local Compose stack (Keycloak/Postgres/Garage), mocked AI, a synthetic account and the repository-authored counting PDF.</description>
   <actions>
     <action>Launch LessonBooks on the selected test emulator.</action>
     <action>Verify that the sign-in form and Create account button are visible.</action>

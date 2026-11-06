@@ -15,8 +15,7 @@ const DEFAULT_AUDIT_LIMIT = 50;
 
 // Identity providers that cannot put a trustworthy authentication time in the
 // access token resolve it lazily, so no extra lookup happens on ordinary requests.
-// Roles come from the identity provider's realm-role claim; the Firebase provider
-// sets none, so admin routes fail closed under it.
+// Roles come from the identity provider's realm-role claim.
 export type Identity = {
   uid: string;
   roles?: string[] | undefined;

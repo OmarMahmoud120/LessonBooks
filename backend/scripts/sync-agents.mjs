@@ -56,16 +56,8 @@ emit(
         'Bash(npm run lint)',
         'Bash(npm run typecheck)',
         'Bash(npm run build)',
-        'Bash(npm run emulators)',
       ],
-      ask: [
-        'Bash(npm install *)',
-        'Bash(npm ci *)',
-        'Bash(git push *)',
-        'Bash(firebase deploy *)',
-        'WebFetch',
-        'WebSearch',
-      ],
+      ask: ['Bash(npm install *)', 'Bash(npm ci *)', 'Bash(git push *)', 'WebFetch', 'WebSearch'],
       deny: [
         'Read(**/.env)',
         'Read(**/.env.local)',

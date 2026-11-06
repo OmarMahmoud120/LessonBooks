@@ -1,17 +1,5 @@
 import { expect, it } from 'vitest';
 import { runtimeConfig } from '../src/runtime-config';
-const cloudEnv = {
-  CLOUD_RUNTIME_APPROVED: 'true',
-  NODE_ENV: 'production',
-  FIREBASE_PROJECT_ID: 'lessonbooks-prod',
-  GCLOUD_REGION: 'europe-west6',
-  CLOUD_TASKS_LOCATION: 'europe-west6',
-  CLOUD_TASKS_QUEUE: 'lesson-generation',
-  WORKER_URL: 'https://worker.example.run.app',
-  WORKER_SERVICE_ACCOUNT: 'worker@lessonbooks-prod.iam.gserviceaccount.com',
-  SERVICE_ROLE: 'worker',
-  HOST: '0.0.0.0',
-};
 const s3Env = {
   ASSET_STORE: 's3',
   S3_ENDPOINT: 'http://garage:3900',
@@ -20,19 +8,36 @@ const s3Env = {
   S3_ACCESS_KEY_ID: 'GK0123456789abcdef0123456789abcdef',
   S3_SECRET_ACCESS_KEY: 'a'.repeat(64),
 };
-it('keeps host defaults emulator-only with combined local processes', () => {
+const keycloakEnv = {
+  AUTH_PROVIDER: 'keycloak',
+  KEYCLOAK_ISSUER: 'http://127.0.0.1:8081/realms/lessonbooks',
+  KEYCLOAK_BACKCHANNEL_URL: 'http://keycloak:8080',
+  KEYCLOAK_AUDIENCE: 'lessonbooks-api',
+  KEYCLOAK_CLIENT_ID: 'lessonbooks-api',
+  KEYCLOAK_CLIENT_SECRET: 'local-only-api-service-secret-0123456789',
+};
+it('defaults to the self-hosted local runtime with loopback services', () => {
   expect(runtimeConfig({})).toMatchObject({
-    mode: 'emulator',
+    mode: 'local',
     role: 'all',
     host: '127.0.0.1',
     port: 3001,
     requireScan: false,
-    assets: { kind: 'firebase' },
+    repository: 'postgres',
+    assets: { kind: 's3', endpoint: 'http://127.0.0.1:3900', bucket: 'lessonbooks' },
+    auth: {
+      kind: 'keycloak',
+      issuer: 'http://127.0.0.1:8081/realms/lessonbooks',
+      backchannelUrl: 'http://127.0.0.1:8081',
+    },
+    postgres: {
+      url: 'postgres://lessonbooks:local-only-documents-db-password@127.0.0.1:5432/lessonbooks',
+    },
   });
 });
 it('accepts a loopback Garage endpoint for private assets', () => {
   expect(runtimeConfig(s3Env)).toMatchObject({
-    mode: 'emulator',
+    mode: 'local',
     assets: {
       kind: 's3',
       endpoint: 'http://garage:3900',
@@ -44,20 +49,9 @@ it('accepts a loopback Garage endpoint for private assets', () => {
     endpoint: 'http://127.0.0.1:3900',
   });
 });
-const keycloakEnv = {
-  AUTH_PROVIDER: 'keycloak',
-  KEYCLOAK_ISSUER: 'http://127.0.0.1:8081/realms/lessonbooks',
-  KEYCLOAK_BACKCHANNEL_URL: 'http://keycloak:8080',
-  KEYCLOAK_AUDIENCE: 'lessonbooks-api',
-  KEYCLOAK_CLIENT_ID: 'lessonbooks-api',
-  KEYCLOAK_CLIENT_SECRET: 'local-only-api-service-secret-0123456789',
-};
-it('keeps Firebase Auth as the default identity provider', () => {
-  expect(runtimeConfig({}).auth).toEqual({ kind: 'firebase' });
-});
 it('accepts Keycloak with a public issuer and an internal backchannel', () => {
   expect(runtimeConfig(keycloakEnv)).toMatchObject({
-    mode: 'emulator',
+    mode: 'local',
     auth: {
       kind: 'keycloak',
       issuer: 'http://127.0.0.1:8081/realms/lessonbooks',
@@ -69,22 +63,23 @@ it('accepts Keycloak with a public issuer and an internal backchannel', () => {
 });
 it.each([
   { AUTH_PROVIDER: 'auth0' },
-  { ...keycloakEnv, KEYCLOAK_ISSUER: undefined },
+  { AUTH_PROVIDER: 'firebase' },
+  { ...keycloakEnv, KEYCLOAK_ISSUER: '' },
   { ...keycloakEnv, KEYCLOAK_ISSUER: 'http://127.0.0.1:8081/realms/' },
   { ...keycloakEnv, KEYCLOAK_ISSUER: 'http://127.0.0.1:8081/' },
   { ...keycloakEnv, KEYCLOAK_ISSUER: 'https://127.0.0.1:8081/realms/lessonbooks' },
   { ...keycloakEnv, KEYCLOAK_ISSUER: 'http://example.com/realms/lessonbooks' },
   { ...keycloakEnv, KEYCLOAK_BACKCHANNEL_URL: 'http://example.com:8080' },
-  { ...keycloakEnv, KEYCLOAK_BACKCHANNEL_URL: undefined },
+  { ...keycloakEnv, KEYCLOAK_BACKCHANNEL_URL: '' },
   { ...keycloakEnv, KEYCLOAK_CLIENT_SECRET: 'short' },
-  { ...keycloakEnv, KEYCLOAK_CLIENT_SECRET: undefined },
+  { ...keycloakEnv, KEYCLOAK_CLIENT_SECRET: '' },
   { ...keycloakEnv, KEYCLOAK_AUDIENCE: 'bad audience' },
-  { ...cloudEnv, AUTH_PROVIDER: 'keycloak' },
 ])('rejects unsafe Keycloak settings %j', (env) => {
   expect(() => runtimeConfig(env)).toThrow();
 });
 it.each([
   { ASSET_STORE: 'minio' },
+  { ASSET_STORE: 'firebase' },
   { ...s3Env, S3_ENDPOINT: '' },
   { ...s3Env, S3_ENDPOINT: 'garage:3900' },
   { ...s3Env, S3_ENDPOINT: 'http://garage:9000' },
@@ -97,46 +92,17 @@ it.each([
   { ...s3Env, S3_ACCESS_KEY_ID: 'short' },
   { ...s3Env, S3_ACCESS_KEY_ID: '' },
   { ...s3Env, S3_SECRET_ACCESS_KEY: 'short' },
-  { ...cloudEnv, ASSET_STORE: 's3' },
 ])('rejects unsafe S3 asset settings %j', (env) => {
   expect(() => runtimeConfig(env)).toThrow();
 });
-it('supports separate container roles, known emulator DNS and required scanning', () => {
+it('supports separate container roles and required scanning', () => {
   expect(
     runtimeConfig({
       SERVICE_ROLE: 'worker',
       HOST: '0.0.0.0',
       REQUIRE_SCAN: 'true',
-      FIREBASE_AUTH_EMULATOR_HOST: 'emulators:9099',
-      FIRESTORE_EMULATOR_HOST: 'emulators:8080',
-      FIREBASE_STORAGE_EMULATOR_HOST: 'emulators:9199',
     }),
-  ).toMatchObject({ mode: 'emulator', role: 'worker', requireScan: true });
-});
-it('accepts a reviewed cloud configuration with explicit residency and queue path', () => {
-  expect(runtimeConfig(cloudEnv)).toMatchObject({
-    mode: 'cloud',
-    role: 'worker',
-    projectId: 'lessonbooks-prod',
-    queuePath: 'projects/lessonbooks-prod/locations/europe-west6/queues/lesson-generation',
-    workerUrl: 'https://worker.example.run.app',
-    workerServiceAccount: 'worker@lessonbooks-prod.iam.gserviceaccount.com',
-    requireScan: true,
-  });
-});
-it.each([
-  { ...cloudEnv, NODE_ENV: 'development' },
-  { ...cloudEnv, FIREBASE_PROJECT_ID: 'AB' },
-  { ...cloudEnv, GCLOUD_REGION: 'europe-west-6' },
-  { ...cloudEnv, CLOUD_TASKS_LOCATION: 'us-central1' },
-  { ...cloudEnv, CLOUD_TASKS_QUEUE: '' },
-  { ...cloudEnv, WORKER_URL: 'http://worker.example.run.app' },
-  { ...cloudEnv, WORKER_URL: 'https://127.0.0.1' },
-  { ...cloudEnv, WORKER_SERVICE_ACCOUNT: 'worker@gmail.com' },
-  { ...cloudEnv, FIRESTORE_EMULATOR_HOST: 'emulators:8080' },
-  { ...cloudEnv, LIVE_AI_APPROVED: 'true' },
-])('rejects unsafe cloud settings %j', (env) => {
-  expect(() => runtimeConfig(env)).toThrow();
+  ).toMatchObject({ mode: 'local', role: 'worker', requireScan: true });
 });
 it('rejects live AI before any mode decision', () => {
   expect(() => runtimeConfig({ LIVE_AI_APPROVED: 'true' })).toThrow(
@@ -151,11 +117,15 @@ it('requires explicit hosted evaluation approval and blocks production regardles
     'cloudflare_ocr_approval_required',
   );
   expect(() =>
-    runtimeConfig({ ...cloudEnv, OCR_PROVIDER: 'cloudflare', CLOUDFLARE_OCR_APPROVED: 'true' }),
+    runtimeConfig({
+      NODE_ENV: 'production',
+      OCR_PROVIDER: 'cloudflare',
+      CLOUDFLARE_OCR_APPROVED: 'true',
+    }),
   ).toThrow('hosted_ocr_not_approved_for_family_uploads');
   expect(
     runtimeConfig({ OCR_PROVIDER: 'cloudflare', CLOUDFLARE_OCR_APPROVED: 'true' }),
-  ).toMatchObject({ ocrProvider: 'cloudflare', ocrMaxRequests: 1, mode: 'emulator' });
+  ).toMatchObject({ ocrProvider: 'cloudflare', ocrMaxRequests: 1, mode: 'local' });
 });
 it.each(['0', '5', '-1', '1.5', '', 'NaN'])(
   'rejects invalid hosted request cap %j',
@@ -176,13 +146,11 @@ it('keeps local OCR available even when Cloudflare credentials are injected for 
       CLOUDFLARE_API_KEY: 'synthetic-token',
       CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32),
     }).mode,
-  ).toBe('emulator');
+  ).toBe('local');
 });
 it.each([
   { NODE_ENV: 'production' },
   { SERVICE_ROLE: 'unknown' },
-  { FIRESTORE_EMULATOR_HOST: 'firestore.googleapis.com:443' },
-  { FIREBASE_AUTH_EMULATOR_HOST: 'emulators:443' },
   { REQUIRE_SCAN: 'maybe' },
   { PORT: '0' },
   { PORT: '3001.5' },
@@ -204,24 +172,20 @@ it('keeps the documented 5/hour rate limits by default and bounds overrides', ()
       'invalid_rate_limit',
     );
 });
-it('defaults to Firestore and accepts a loopback or Compose Postgres URL', () => {
-  const config = runtimeConfig(keycloakEnv);
-  expect(config.repository).toBe('firestore');
-  expect(config.postgres).toBeUndefined();
-  const postgres = runtimeConfig({
-    ...keycloakEnv,
-    REPOSITORY: 'postgres',
-    POSTGRES_URL:
-      'postgres://lessonbooks:local-only-documents-db-password@postgres:5432/lessonbooks',
-  });
-  expect(postgres.repository).toBe('postgres');
-  expect(postgres.postgres).toEqual({
+it('defaults to Postgres and accepts a loopback or Compose URL', () => {
+  expect(runtimeConfig(keycloakEnv).repository).toBe('postgres');
+  expect(
+    runtimeConfig({
+      ...keycloakEnv,
+      POSTGRES_URL:
+        'postgres://lessonbooks:local-only-documents-db-password@postgres:5432/lessonbooks',
+    }).postgres,
+  ).toEqual({
     url: 'postgres://lessonbooks:local-only-documents-db-password@postgres:5432/lessonbooks',
   });
   expect(
     runtimeConfig({
       ...keycloakEnv,
-      REPOSITORY: 'postgres',
       POSTGRES_URL: 'postgres://lessonbooks:pw@127.0.0.1:5432/lessonbooks',
     }).repository,
   ).toBe('postgres');
@@ -230,32 +194,16 @@ it.each([
   ['postgres://lessonbooks:pw@db.internal:5432/lessonbooks', 'invalid_postgres_url'],
   ['postgres://lessonbooks@postgres:5432/lessonbooks', 'invalid_postgres_url'],
   ['postgres://lessonbooks:pw@postgres:5432/lessonbooks?sslmode=disable', 'invalid_postgres_url'],
-  ['postgresql://lessonbooks:pw@postgres:5432/lessonbooks', 'invalid_postgres_url'],
+  ['postgresql://lessonbooks:pw@postgres:5432/lessonbooks', undefined],
 ])('validates the Postgres URL %s', (url, expected) => {
-  if (expected === 'invalid_postgres_url' && url.startsWith('postgresql://')) {
-    expect(() =>
-      runtimeConfig({ ...keycloakEnv, REPOSITORY: 'postgres', POSTGRES_URL: url }),
-    ).not.toThrow();
+  if (expected === undefined) {
+    expect(() => runtimeConfig({ ...keycloakEnv, POSTGRES_URL: url })).not.toThrow();
     return;
   }
-  expect(() =>
-    runtimeConfig({ ...keycloakEnv, REPOSITORY: 'postgres', POSTGRES_URL: url }),
-  ).toThrow(expected);
+  expect(() => runtimeConfig({ ...keycloakEnv, POSTGRES_URL: url })).toThrow(expected);
 });
-it('rejects unknown repository names and Postgres in the GCP cloud runtime', () => {
+it('rejects unknown repository names', () => {
   expect(() => runtimeConfig({ ...keycloakEnv, REPOSITORY: 'mongo' })).toThrow(
     'invalid_repository',
   );
-  expect(() =>
-    runtimeConfig({
-      REPOSITORY: 'postgres',
-      POSTGRES_URL: 'postgres://lessonbooks:pw@postgres:5432/lessonbooks',
-      CLOUD_RUNTIME_APPROVED: 'true',
-      NODE_ENV: 'production',
-      GCP_PROJECT_ID: 'proj',
-      CLOUD_TASKS_QUEUE: 'q',
-      WORKER_URL: 'https://worker.example.com',
-      WORKER_SERVICE_ACCOUNT: 'worker@proj.iam.gserviceaccount.com',
-    }),
-  ).toThrow('postgres_not_supported_in_cloud_mode');
 });

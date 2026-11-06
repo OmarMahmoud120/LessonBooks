@@ -20,8 +20,8 @@ export type ParentSession = {
   expiresAt: number;
 };
 
-// Like the previous Firebase setup, the session lives in memory only: closing the
-// native process signs the parent out and no token is written to disk.
+// The session lives in memory only: closing the native process signs the parent
+// out and no token is written to disk.
 let session: ParentSession | null = null;
 const listeners = new Set<(next: ParentSession | null) => void>();
 

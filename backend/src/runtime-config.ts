@@ -1,24 +1,24 @@
-export type RuntimeMode = 'emulator' | 'cloud';
-export type AuthConfig =
-  | { kind: 'firebase' }
-  | {
-      kind: 'keycloak';
-      issuer: string;
-      backchannelUrl: string;
-      audience: string;
-      clientId: string;
-      clientSecret: string;
-    };
-export type AssetConfig =
-  | { kind: 'firebase' }
-  | {
-      kind: 's3';
-      endpoint: string;
-      bucket: string;
-      region: string;
-      accessKeyId: string;
-      secretAccessKey: string;
-    };
+// Self-hosted runtime configuration (ADR 0013): Postgres documents, Keycloak identity,
+// Garage S3 assets and a local polling worker. The loopback defaults mirror the
+// synthetic local-only credentials in compose.yaml so `npm run dev` works against
+// `npm run docker:up` with no env file. A VPS deployment must inject real secrets.
+export type RuntimeMode = 'local';
+export type AuthConfig = {
+  kind: 'keycloak';
+  issuer: string;
+  backchannelUrl: string;
+  audience: string;
+  clientId: string;
+  clientSecret: string;
+};
+export type AssetConfig = {
+  kind: 's3';
+  endpoint: string;
+  bucket: string;
+  region: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+};
 export type RuntimeConfig = {
   mode: RuntimeMode;
   role: 'api' | 'worker' | 'all';
@@ -29,14 +29,9 @@ export type RuntimeConfig = {
   ocrMaxRequests: number;
   auth: AuthConfig;
   assets: AssetConfig;
-  repository: 'firestore' | 'postgres';
-  postgres: { url: string } | undefined;
+  repository: 'postgres';
+  postgres: { url: string };
   limits: { pinPerHour: number; uploadsPerHour: number };
-  endpoints: Record<string, string>;
-  projectId?: string;
-  queuePath?: string;
-  workerUrl?: string;
-  workerServiceAccount?: string;
 };
 function pattern(value: string, expression: RegExp, code: string): string {
   if (!expression.test(value)) throw new Error(code);
@@ -63,19 +58,20 @@ function localServiceUrl(value: string | undefined, code: string, pathname?: Reg
     throw new Error(code);
   return url.href.replace(/\/$/, '');
 }
-function keycloakAuth(env: Record<string, string | undefined>, mode: RuntimeMode): AuthConfig {
-  const provider = env.AUTH_PROVIDER ?? 'firebase';
-  if (provider === 'firebase') return { kind: 'firebase' };
-  if (provider !== 'keycloak') throw new Error('invalid_auth_provider');
-  if (mode === 'cloud') throw new Error('keycloak_auth_not_supported_in_cloud_mode');
+function keycloakAuth(env: Record<string, string | undefined>): AuthConfig {
+  if (env.AUTH_PROVIDER !== undefined && env.AUTH_PROVIDER !== 'keycloak')
+    throw new Error('invalid_auth_provider');
   return {
     kind: 'keycloak',
     issuer: localServiceUrl(
-      env.KEYCLOAK_ISSUER,
+      env.KEYCLOAK_ISSUER ?? 'http://127.0.0.1:8081/realms/lessonbooks',
       'invalid_keycloak_issuer',
       /^\/realms\/[A-Za-z0-9-]{1,63}$/,
     ),
-    backchannelUrl: localServiceUrl(env.KEYCLOAK_BACKCHANNEL_URL, 'invalid_keycloak_backchannel'),
+    backchannelUrl: localServiceUrl(
+      env.KEYCLOAK_BACKCHANNEL_URL ?? 'http://127.0.0.1:8081',
+      'invalid_keycloak_backchannel',
+    ),
     audience: pattern(
       env.KEYCLOAK_AUDIENCE ?? 'lessonbooks-api',
       /^[A-Za-z0-9._-]{3,64}$/,
@@ -87,17 +83,16 @@ function keycloakAuth(env: Record<string, string | undefined>, mode: RuntimeMode
       'invalid_keycloak_client_id',
     ),
     clientSecret: pattern(
-      env.KEYCLOAK_CLIENT_SECRET ?? '',
+      env.KEYCLOAK_CLIENT_SECRET ?? 'local-only-api-service-secret-0123456789',
       /^[A-Za-z0-9._~+/=-]{16,256}$/,
       'invalid_keycloak_client_secret',
     ),
   };
 }
-function s3Assets(env: Record<string, string | undefined>, mode: RuntimeMode): AssetConfig {
-  if (mode === 'cloud') throw new Error('s3_assets_not_supported_in_cloud_mode');
+function s3Assets(env: Record<string, string | undefined>): AssetConfig {
   let endpoint: URL;
   try {
-    endpoint = new URL(env.S3_ENDPOINT ?? '');
+    endpoint = new URL(env.S3_ENDPOINT ?? 'http://127.0.0.1:3900');
   } catch {
     throw new Error('invalid_s3_endpoint');
   }
@@ -115,15 +110,16 @@ function s3Assets(env: Record<string, string | undefined>, mode: RuntimeMode): A
   return {
     kind: 's3',
     endpoint: endpoint.origin,
-    bucket: pattern(env.S3_BUCKET ?? '', BUCKET_NAME, 'invalid_s3_bucket'),
+    bucket: pattern(env.S3_BUCKET ?? 'lessonbooks', BUCKET_NAME, 'invalid_s3_bucket'),
     region: pattern(env.S3_REGION ?? 'garage', /^[a-z0-9-]{1,32}$/, 'invalid_s3_region'),
     accessKeyId: pattern(
-      env.S3_ACCESS_KEY_ID ?? '',
+      env.S3_ACCESS_KEY_ID ?? 'GK0123456789abcdef0123456789abcdef',
       /^[A-Za-z0-9]{16,128}$/,
       'invalid_s3_access_key',
     ),
     secretAccessKey: pattern(
-      env.S3_SECRET_ACCESS_KEY ?? '',
+      env.S3_SECRET_ACCESS_KEY ??
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       /^[A-Za-z0-9+/=_-]{8,256}$/,
       'invalid_s3_secret_key',
     ),
@@ -139,42 +135,37 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
   const selected = roles.find((candidate) => candidate === env.SERVICE_ROLE);
   if (env.SERVICE_ROLE !== undefined && !selected) throw new Error('invalid_service_role');
   const role: (typeof roles)[number] = selected ?? 'all';
-  const assetStore = env.ASSET_STORE ?? 'firebase';
-  if (assetStore !== 'firebase' && assetStore !== 's3') throw new Error('invalid_asset_store');
-  const mode: RuntimeMode = env.CLOUD_RUNTIME_APPROVED === 'true' ? 'cloud' : 'emulator';
-  const assets: AssetConfig = assetStore === 's3' ? s3Assets(env, mode) : { kind: 'firebase' };
-  const auth = keycloakAuth(env, mode);
-  // Document-store selection (ADR 0013 phase 4): Firestore stays the default until
-  // the cutover is declared; Postgres requires an explicit connection URL whose host
-  // is a loopback or known Compose service in the emulator runtime. The GCP cloud
-  // runtime keeps Firestore and does not accept Postgres yet.
-  const repository = env.REPOSITORY ?? 'firestore';
-  if (repository !== 'firestore' && repository !== 'postgres')
-    throw new Error('invalid_repository');
-  let postgres: { url: string } | undefined;
-  if (repository === 'postgres') {
-    if (mode === 'cloud') throw new Error('postgres_not_supported_in_cloud_mode');
-    let url: URL;
-    try {
-      url = new URL(env.POSTGRES_URL ?? '');
-    } catch {
-      throw new Error('invalid_postgres_url');
-    }
-    if (
-      !['postgres:', 'postgresql:'].includes(url.protocol) ||
-      url.username === '' ||
-      url.password === '' ||
-      url.search ||
-      url.hash ||
-      !['127.0.0.1', 'localhost', 'postgres'].includes(url.hostname)
-    )
-      throw new Error('invalid_postgres_url');
-    postgres = { url: env.POSTGRES_URL! };
+  const assetStore = env.ASSET_STORE ?? 's3';
+  if (assetStore !== 's3') throw new Error('invalid_asset_store');
+  const assets = s3Assets(env);
+  const auth = keycloakAuth(env);
+  // Self-hosted document store (ADR 0013 phase 4): Postgres requires an explicit
+  // connection URL whose host is a loopback or known Compose service.
+  const repository = env.REPOSITORY ?? 'postgres';
+  if (repository !== 'postgres') throw new Error('invalid_repository');
+  let url: URL;
+  try {
+    url = new URL(
+      env.POSTGRES_URL ??
+        'postgres://lessonbooks:local-only-documents-db-password@127.0.0.1:5432/lessonbooks',
+    );
+  } catch {
+    throw new Error('invalid_postgres_url');
   }
+  if (
+    !['postgres:', 'postgresql:'].includes(url.protocol) ||
+    url.username === '' ||
+    url.password === '' ||
+    url.search ||
+    url.hash ||
+    !['127.0.0.1', 'localhost', 'postgres'].includes(url.hostname)
+  )
+    throw new Error('invalid_postgres_url');
+  const postgres = { url: url.href };
   let ocrMaxRequests = 0;
   if (ocrProvider === 'cloudflare') {
-    // The selectable hosted path is restricted to owned fixtures in the emulator runtime.
-    if (env.CLOUD_RUNTIME_APPROVED === 'true' || env.NODE_ENV === 'production')
+    // The selectable hosted path is restricted to owned fixtures in the local runtime.
+    if (env.NODE_ENV === 'production')
       throw new Error('hosted_ocr_not_approved_for_family_uploads');
     if (role !== 'api' && env.CLOUDFLARE_OCR_APPROVED !== 'true')
       throw new Error('cloudflare_ocr_approval_required');
@@ -201,86 +192,10 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('invalid_port');
   if (env.REQUIRE_SCAN && !['true', 'false'].includes(env.REQUIRE_SCAN))
     throw new Error('invalid_scan_setting');
-  const emulatorEndpointNames = [
-    'FIREBASE_AUTH_EMULATOR_HOST',
-    'FIRESTORE_EMULATOR_HOST',
-    'FIREBASE_STORAGE_EMULATOR_HOST',
-  ] as const;
-  if (env.CLOUD_RUNTIME_APPROVED === 'true') {
-    if (env.NODE_ENV !== 'production') throw new Error('cloud_requires_production_hardening');
-    if (role === 'all') throw new Error('cloud_requires_separate_roles');
-    if (emulatorEndpointNames.some((key) => env[key]))
-      throw new Error('emulator_endpoints_forbidden');
-    const projectId = pattern(
-      env.FIREBASE_PROJECT_ID ?? '',
-      /^[a-z][a-z0-9-]{4,28}$/,
-      'invalid_project_id',
-    );
-    const region = pattern(
-      env.GCLOUD_REGION ?? '',
-      /^[a-z]{2,12}-[a-z]+[0-9]{1,2}$/,
-      'invalid_region',
-    );
-    const location = pattern(
-      env.CLOUD_TASKS_LOCATION ?? '',
-      /^[a-z]{2,12}-[a-z]+[0-9]{1,2}$/,
-      'invalid_tasks_location',
-    );
-    if (location !== region) throw new Error('tasks_location_mismatch');
-    const queue = pattern(
-      env.CLOUD_TASKS_QUEUE ?? '',
-      /^[a-zA-Z][a-zA-Z0-9_-]{0,499}$/,
-      'invalid_queue',
-    );
-    const workerUrl = pattern(
-      env.WORKER_URL ?? '',
-      /^https:\/\/[a-z0-9.-]{4,253}(:[0-9]{2,5})?\/?$/,
-      'invalid_worker_url',
-    );
-    if (['127.0.0.1', 'localhost', '::1'].includes(new URL(workerUrl).hostname))
-      throw new Error('invalid_worker_url');
-    const workerServiceAccount = pattern(
-      env.WORKER_SERVICE_ACCOUNT ?? '',
-      /^[a-z][a-z0-9-]{4,30}@[a-z][a-z0-9.-]{4,60}\.iam\.gserviceaccount\.com$/,
-      'invalid_worker_service_account',
-    );
-    return {
-      mode: 'cloud',
-      role,
-      host,
-      port,
-      requireScan: env.REQUIRE_SCAN !== 'false',
-      ocrProvider,
-      ocrMaxRequests,
-      auth,
-      assets,
-      repository: 'firestore' as const,
-      postgres: undefined,
-      limits,
-      endpoints: {},
-      projectId,
-      queuePath: `projects/${projectId}/locations/${location}/queues/${queue}`,
-      workerUrl,
-      workerServiceAccount,
-    };
-  }
   if (env.NODE_ENV === 'production')
     throw new Error('Use reviewed cloud configuration before production/live AI.');
-  const endpoints: Record<string, string> = {};
-  for (const [key, expectedPort] of [
-    ['FIREBASE_AUTH_EMULATOR_HOST', 9099],
-    ['FIRESTORE_EMULATOR_HOST', 8080],
-    ['FIREBASE_STORAGE_EMULATOR_HOST', 9199],
-  ] as const) {
-    const value = env[key] ?? `127.0.0.1:${expectedPort}`;
-    if (
-      !['127.0.0.1', 'localhost', 'emulators'].some((name) => value === `${name}:${expectedPort}`)
-    )
-      throw new Error('invalid_emulator_endpoint');
-    endpoints[key] = value;
-  }
   return {
-    mode: 'emulator',
+    mode: 'local',
     role,
     host,
     port,
@@ -289,9 +204,8 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
     ocrMaxRequests,
     auth,
     assets,
-    repository,
+    repository: 'postgres',
     postgres,
     limits,
-    endpoints,
   };
 }

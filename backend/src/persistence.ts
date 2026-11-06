@@ -1,6 +1,3 @@
-import type { Firestore, Transaction as FirebaseTransaction } from 'firebase-admin/firestore';
-import type { Bucket } from '@google-cloud/storage';
-
 export interface Transaction {
   get<T>(path: string): Promise<T | undefined>;
   list<T>(path: string): Promise<T[]>;
@@ -78,58 +75,5 @@ export class MemoryAssets implements Assets {
   }
   async deletePrefix(prefix: string) {
     for (const key of this.objects.keys()) if (key.startsWith(prefix)) this.objects.delete(key);
-  }
-}
-export class FirestoreRepository implements Repository {
-  constructor(private db: Firestore) {}
-  async get<T>(path: string): Promise<T | undefined> {
-    return (await this.db.doc(path).get()).data() as T | undefined;
-  }
-  async list<T>(collection: string): Promise<T[]> {
-    return (await this.db.collection(collection).get()).docs.map((d) => d.data() as T);
-  }
-  async atomic<T>(fn: (tx: Transaction) => Promise<T>): Promise<T> {
-    return this.db.runTransaction(async (native: FirebaseTransaction) => {
-      const writes: (() => void)[] = [];
-      const result = await fn({
-        get: async <V>(path: string) =>
-          (await native.get(this.db.doc(path))).data() as V | undefined,
-        list: async <V>(path: string) => {
-          const snapshot = await native.get(this.db.collection(path));
-          return snapshot.docs.map((d) => d.data() as V);
-        },
-        put: (path, value) => {
-          writes.push(() => {
-            native.set(this.db.doc(path), value);
-          });
-        },
-        delete: (path) => {
-          writes.push(() => {
-            native.delete(this.db.doc(path));
-          });
-        },
-      });
-      writes.forEach((write) => write());
-      return result;
-    });
-  }
-  async deleteTree(path: string) {
-    await this.db.recursiveDelete(this.db.doc(path));
-  }
-}
-export class StorageAssets implements Assets {
-  constructor(private bucket: Bucket) {}
-  async put(path: string, bytes: Uint8Array, contentType: string) {
-    await this.bucket.file(path).save(Buffer.from(bytes), {
-      resumable: false,
-      metadata: { contentType, cacheControl: 'private, no-store' },
-    });
-  }
-  async get(path: string) {
-    const [bytes] = await this.bucket.file(path).download();
-    return bytes;
-  }
-  async deletePrefix(prefix: string) {
-    await this.bucket.deleteFiles({ prefix, force: true });
   }
 }

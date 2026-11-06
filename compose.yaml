@@ -149,20 +149,6 @@ services:
       timeout: 5s
       retries: 30
       start_period: 40s
-  emulators:
-    build: { context: ., dockerfile: backend/Dockerfile, target: emulators }
-    init: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    mem_limit: 1536m
-    pids_limit: 256
-    volumes: [emulator-data:/data]
-    ports:
-      - '127.0.0.1:9099:9099'
-      - '127.0.0.1:8080:8080'
-      - '127.0.0.1:9199:9199'
-    networks: [private, local]
-    stop_grace_period: 60s
   signatures:
     build: { context: ., dockerfile: backend/Dockerfile, target: worker }
     entrypoint: [freshclam, --config-file=/app/freshclam.conf, --stdout]
@@ -178,9 +164,6 @@ services:
     environment: &local-env
       NODE_ENV: development
       HOST: 0.0.0.0
-      FIREBASE_AUTH_EMULATOR_HOST: emulators:9099
-      FIRESTORE_EMULATOR_HOST: emulators:8080
-      FIREBASE_STORAGE_EMULATOR_HOST: emulators:9199
       ASSET_STORE: s3
       S3_ENDPOINT: http://garage:3900
       S3_BUCKET: ${GARAGE_DEFAULT_BUCKET:-lessonbooks}
@@ -188,8 +171,7 @@ services:
       S3_ACCESS_KEY_ID: ${GARAGE_DEFAULT_ACCESS_KEY:-GK0123456789abcdef0123456789abcdef}
       S3_SECRET_ACCESS_KEY: ${GARAGE_DEFAULT_SECRET_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
       AUTH_PROVIDER: keycloak
-      # Self-hosted document store (ADR 0013 phase 4): Postgres replaces Firestore
-      # in the Compose runtime; Firestore stays the default where REPOSITORY is unset.
+      # Self-hosted document store (ADR 0013 phase 4): Postgres is the only repository.
       REPOSITORY: postgres
       POSTGRES_URL: postgres://lessonbooks:${DOCUMENTS_DB_PASSWORD:-local-only-documents-db-password}@postgres:5432/lessonbooks
       # Local-only rate-limit bump for browser-test repeatability; the documented
@@ -205,7 +187,6 @@ services:
     networks: [private, local]
     ports: ['127.0.0.1:3001:3001']
     depends_on:
-      emulators: { condition: service_healthy }
       garage: { condition: service_healthy }
       keycloak: { condition: service_healthy }
       postgres: { condition: service_healthy }
@@ -224,7 +205,6 @@ services:
     mem_limit: 1536m
     volumes: [scanner-data:/var/lib/clamav:ro]
     depends_on:
-      emulators: { condition: service_healthy }
       garage: { condition: service_healthy }
       keycloak: { condition: service_healthy }
       postgres: { condition: service_healthy }
@@ -238,7 +218,6 @@ networks:
   updates: {}
   local: {}
 volumes:
-  emulator-data: {}
   scanner-data: {}
   garage-data: {}
   keycloak-db-data: {}
