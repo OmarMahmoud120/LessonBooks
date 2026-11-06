@@ -329,6 +329,7 @@ export async function createAPI(
   // admin action is recorded in the append-only audit log before it is answered,
   // and every check fails closed. Routes are not registered until the services
   // they need are provided.
+  if (ops && !audit) throw new Error('admin_routes_require_audit_log');
   if (audit || ops) {
     const adminIdentity = (request: object): Identity => {
       const identity = identities.get(request)!;
@@ -336,13 +337,16 @@ export async function createAPI(
       return identity;
     };
     if (audit) {
-      app.get<{ Querystring: { limit?: string } }>(
+      app.get<{ Querystring: { limit?: string; before?: string } }>(
         '/v1/admin/audit',
         {
           schema: {
             querystring: {
               type: 'object',
-              properties: { limit: { type: 'string', pattern: '^[0-9]{1,3}$' } },
+              properties: {
+                limit: { type: 'string', pattern: '^[0-9]{1,3}$' },
+                before: { type: 'string', pattern: '^[0-9TZ:.+-]{10,40}$' },
+              },
               additionalProperties: false,
             },
           },
@@ -352,7 +356,7 @@ export async function createAPI(
           // Reading the audit log is itself sensitive: it exposes operator activity.
           await requireRecentAuth(identity);
           const limit = Number(request.query.limit ?? String(DEFAULT_AUDIT_LIMIT));
-          const entries = await audit.list(limit);
+          const entries = await audit.list(limit, request.query.before);
           await audit.record(
             'admin.audit.list',
             identity.uid,
@@ -392,13 +396,18 @@ export async function createAPI(
       );
       app.post<{ Params: { id: string } }>(
         '/v1/admin/jobs/:id/retry',
-        { schema: { params: idSchema } },
+        {
+          config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
+          schema: { params: idSchema },
+        },
         async (request) => {
           const identity = adminIdentity(request);
           await requireRecentAuth(identity);
-          const result = await ops.retryJob(request.params.id);
-          await audit?.record('admin.job.retry', identity.uid, `job=${request.params.id}`);
-          return result;
+          // Mutation and audit entry commit in one transaction.
+          return ops.retryJob(request.params.id, {
+            action: 'admin.job.retry',
+            actorUid: identity.uid,
+          });
         },
       );
       app.get('/v1/admin/usage', async (request) => {
@@ -477,6 +486,28 @@ export async function createAPI(
             `family=${request.params.id} lesson=${request.params.lessonId}`,
           );
           return view;
+        },
+      );
+      app.post<{ Params: { id: string; lessonId: string } }>(
+        '/v1/admin/families/:id/lessons/:lessonId/deactivate',
+        {
+          schema: {
+            params: {
+              type: 'object',
+              properties: { id: idSchema.properties.id, lessonId: idSchema.properties.id },
+              required: ['id', 'lessonId'],
+              additionalProperties: false,
+            },
+          },
+        },
+        async (request) => {
+          const identity = adminIdentity(request);
+          await requireRecentAuth(identity);
+          // Mutation and audit entry commit in one transaction.
+          return ops.deactivateLesson(request.params.id, request.params.lessonId, {
+            action: 'admin.lesson.deactivate',
+            actorUid: identity.uid,
+          });
         },
       );
     }

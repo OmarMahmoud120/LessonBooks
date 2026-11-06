@@ -408,3 +408,44 @@ append-only is a service-level property — storage-level immutability is expect
 from Postgres permissions at the cutover. The 400-day retention window is a
 recorded engineering default; the production TTL remains an open launch decision
 per doc/privacy-compliance.md.
+
+## VPS migration phase 4 — Postgres cutover — 2026-11-06
+
+The Compose runtime now runs on the self-hosted document store: `REPOSITORY=postgres`
+selects `PostgresRepository` (connection URL validated against a loopback/Compose
+host allowlist, rejected in the GCP cloud runtime), `server.ts` initializes Firebase
+only when Firestore, Firebase assets or Firebase auth are actually selected, and a
+digest-pinned `postgres:16-alpine` service with a persistent volume serves the
+documents table. The Compose api and worker run with `REPOSITORY=postgres`; the
+Firestore default remains wherever `REPOSITORY` is unset. The real-Postgres behaviors
+pg-mem could not prove are now covered by a gated integration suite
+(`POSTGRES_TEST_URL`): transaction rollback discards partial writes, eight concurrent
+read-modify-write transactions under SERIALIZABLE isolation all commit through the
+retry path — which exposed that immediate retries re-enter the same contention, fixed
+with a short jittered backoff — and byte-level path/content edge cases round-trip.
+`npm run docker:test` passed the full journey (Keycloak token, consents, owned PDFs,
+worker scan and OCR, three drafts, approval, deletion, zero remaining Garage objects,
+identity removed) against Postgres. The documents table pins `COLLATE "C"` for exact
+prefix range scans, migrating existing tables in place on startup.
+
+Two independent reviewer agents (security and privacy roles) reviewed the full branch
+diff plus these working-tree changes; this remains reviewer-tool coverage, not human
+sign-off. Fixed from their findings: mutating admin actions (job retry, lesson
+deactivation) now write their audit entry inside the same repository transaction as
+the mutation; audit retention is also enforced on the read path; operator views strip
+all PIN credential metadata and no longer include kid nicknames; the subject-access
+export includes kid profiles; `createAPI` refuses admin routes without an audit log;
+admin retry gained the same 10/hour limit as the parent route; the token subject is
+validated against the path-safe alphabet; the Postgres path column pins byte
+collation. Recorded as cutover gates rather than fixed: `trustProxy` for the Caddy
+proxy (rate-limit keying collapses behind it), deployment-aware runtime validators,
+CORS origin, dropping the Postgres test port in `compose.vps.yaml`, and the
+registration/email-verification decisions (all added to the phase 5 checklist).
+Recorded as follow-ups: `/v1/family` still returns PIN metadata to the parent's own
+client (pre-existing), and the site OIDC session persists tokens in localStorage.
+
+The host now runs Node v26.13.0, which satisfies the declared >=24 engine range, so
+the earlier "supported engine unverified" caveats from the 23.7.0 era are superseded
+by today's green runs. Remaining phase 4/6 items: rules-test replacement decisions
+and the full `npm run check` on the Postgres runtime; phase 5 needs real VPS
+provisioning decisions and secrets.

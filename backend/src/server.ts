@@ -1,10 +1,12 @@
 import Fastify from 'fastify';
+import { Pool } from 'pg';
 import { runtimeConfig } from './runtime-config';
-import { initializeApp } from 'firebase-admin/app';
+import { initializeApp, type App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import { FirestoreRepository, StorageAssets, type Assets } from './persistence';
+import { FirestoreRepository, StorageAssets, type Assets, type Repository } from './persistence';
+import { PostgresRepository } from './persistence-postgres';
 import { S3Assets, createS3Transport } from './persistence-s3';
 import { KeycloakAdmin, KeycloakTokens } from './auth-keycloak';
 import { FamilyService } from './family';
@@ -20,12 +22,22 @@ import { CloudTasksPublisher, OutboxSweeper } from './transport';
 // Emulator mode keeps the local polling worker; cloud mode dispatches via Cloud Tasks.
 const config = runtimeConfig(process.env);
 const ingestor = createRuntimeIngestor(config, process.env);
-const projectId = config.mode === 'cloud' ? config.projectId! : 'demo-lessonbooks';
-const firebase = initializeApp({ projectId, storageBucket: `${projectId}.appspot.com` });
+// The self-hosted runtime (Postgres + Garage + Keycloak, ADR 0013 phase 4) needs no
+// Firebase at all; the GCP runtime still initializes it for Firestore, Storage and Auth.
+const firebaseNeeded =
+  config.repository === 'firestore' ||
+  config.auth.kind === 'firebase' ||
+  config.assets.kind === 'firebase';
+const firebase: App | undefined = firebaseNeeded
+  ? initializeApp({
+      projectId: config.mode === 'cloud' ? config.projectId! : 'demo-lessonbooks',
+      storageBucket: `${config.mode === 'cloud' ? config.projectId! : 'demo-lessonbooks'}.appspot.com`,
+    })
+  : undefined;
 Object.assign(process.env, config.endpoints);
 // Firestore still stores family documents in both modes; identity moves to Keycloak
 // when AUTH_PROVIDER=keycloak. The Firebase user-deletion hook is only used by Firebase.
-const firebaseAuth = config.auth.kind === 'firebase' ? getAuth(firebase) : undefined;
+const firebaseAuth = config.auth.kind === 'firebase' ? getAuth(firebase!) : undefined;
 const keycloak =
   config.auth.kind === 'keycloak'
     ? {
@@ -39,14 +51,21 @@ const verifyToken = keycloak
       const identity = await firebaseAuth!.verifyIdToken(token, true);
       return { uid: identity.uid, auth_time: identity.auth_time };
     };
-const repo = new FirestoreRepository(getFirestore(firebase));
+let repo: Repository;
+if (config.repository === 'postgres') {
+  const pool = new Pool({ connectionString: config.postgres!.url, max: 10 });
+  repo = new PostgresRepository(pool);
+  await (repo as PostgresRepository).init();
+} else {
+  repo = new FirestoreRepository(getFirestore(firebase!));
+}
 let assets: Assets;
 if (config.assets.kind === 's3') {
   const s3 = new S3Assets(createS3Transport(config.assets), config.assets.bucket);
   await s3.init();
   assets = s3;
 } else {
-  assets = new StorageAssets(getStorage(firebase).bucket());
+  assets = new StorageAssets(getStorage(firebase!).bucket());
 }
 const families = new FamilyService(repo, assets, async (uid) => {
   if (keycloak) {

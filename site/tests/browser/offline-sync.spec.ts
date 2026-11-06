@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 
 // Requires the local Compose stack (npm run docker:up: API on 3001, Keycloak on 8081)
 // and the vite dev server. Skips when either is unreachable so plain `npm run check`
@@ -8,10 +8,13 @@ import { test, expect, type Page } from '@playwright/test';
 // transient failure is possible exactly once in a while. Opening a lesson is one
 // fetch with no localStorage fallback for drafts, so retry it once through the UI
 // and assert on the player container, which the lesson tiles cannot imitate.
-async function openKidLesson(page: Page) {
+// The tile scopes every click by summary: the Postgres document store returns
+// lessons in path order, so tile positions are not stable across runs.
+async function openLesson(page: Page, tile: Locator) {
   const player = page.locator('.lesson-player');
+  const open = tile.getByRole('button', { name: 'Review lesson' });
   for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0) await page.getByRole('button', { name: 'Review lesson' }).first().click();
+    if (attempt > 0) await open.click();
     await expect(player)
       .toBeVisible({ timeout: 8000 })
       .catch(() => {});
@@ -19,6 +22,7 @@ async function openKidLesson(page: Page) {
   }
   await expect(player).toBeVisible();
 }
+const countingTile = (page: Page) => page.locator('.lesson-tile', { hasText: 'Counting together' });
 test.beforeEach(async ({ request }) => {
   const health = await request.get('http://127.0.0.1:3001/health').catch(() => null);
   test.skip(!health || !health.ok(), 'backend API not running (start npm run docker:up)');
@@ -78,8 +82,8 @@ test('assigned lesson completes offline, restarts, and syncs events exactly once
   });
   await expect(page.getByRole('button', { name: 'Review lesson' })).toHaveCount(3);
 
-  // Approve the first draft.
-  await openKidLesson(page);
+  // Approve the counting draft (tile-scoped: lesson order is not stable).
+  await openLesson(page, countingTile(page));
   await page.getByRole('button', { name: 'Approve this lesson' }).click();
   await expect(page.getByText('Approved').first()).toBeVisible();
   await page.getByRole('button', { name: 'Back to your library' }).click();
@@ -87,7 +91,7 @@ test('assigned lesson completes offline, restarts, and syncs events exactly once
   // Assign it and enter child play, which caches the lesson for offline use.
   await page.getByRole('button', { name: 'Assign', exact: true }).first().click();
   await page.getByRole('button', { name: 'Child play' }).click();
-  await openKidLesson(page);
+  await openLesson(page, countingTile(page));
   await expect(
     page.locator('.lesson-player').getByRole('heading', { name: 'Counting together', exact: true }),
   ).toBeVisible();

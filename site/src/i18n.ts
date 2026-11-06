@@ -138,6 +138,8 @@ export const strings = {
     adminIdentityExists: 'Identity still exists',
     adminKids: 'kids',
     adminLessonId: 'Lesson identifier',
+    adminDeactivate: 'Deactivate lesson',
+    adminDeactivationState: 'Lesson status',
   },
   ar: {
     brand: 'كتاب الدروس',

@@ -69,9 +69,23 @@ export class PostgresRepository implements Repository {
   ) {}
 
   async init() {
+    // The COLLATE "C" pin lands via the guarded migration below because
+    // in-process SQL doubles cannot parse COLLATE DDL; real servers pin byte
+    // ordering so the prefix range scan is exact regardless of libc/ICU
+    // collation (security review #6).
     await this.pool.query(
       'CREATE TABLE IF NOT EXISTS documents (path text PRIMARY KEY, data jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now())',
     );
+    // The information_schema probe distinguishes real servers from in-process
+    // test doubles: a double reports no collation (null) and skips the
+    // migration; a real unpinned table reports its named default collation and
+    // is migrated; a pinned table reports "C".
+    const column = await this.pool.query<{ collation_name: string | null }>(
+      "SELECT collation_name FROM information_schema.columns WHERE table_name = 'documents' AND column_name = 'path'",
+    );
+    const collation = column.rows[0]?.collation_name;
+    if (collation !== null && collation !== undefined && collation !== 'C')
+      await this.pool.query('ALTER TABLE documents ALTER COLUMN path TYPE text COLLATE "C"');
   }
 
   async get<T>(path: string): Promise<T | undefined> {
@@ -111,7 +125,13 @@ export class PostgresRepository implements Repository {
         return result;
       } catch (error) {
         await client.query('ROLLBACK').catch(() => undefined);
-        if (attempt < this.retries && isSerializationFailure(error)) continue;
+        if (attempt < this.retries && isSerializationFailure(error)) {
+          // An immediate retry re-enters the same contention that caused the
+          // abort; a short jittered backoff lets the conflicting commit land.
+          const backoffMs = 10 * (attempt + 1) + Math.floor(Math.random() * 10);
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+          continue;
+        }
         throw error;
       } finally {
         client.release();

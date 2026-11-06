@@ -14,6 +14,11 @@ import {
 } from './domain';
 import { assertLesson, assertEvent, type LessonEvent } from '@lessonbooks/contracts';
 import { noopPublisher, type TaskPublisher } from './transport';
+import { AuditLog } from './admin';
+
+// Operator audit intent (ADR 0016): when an admin action mutates state, the audit
+// entry is written inside the same transaction so neither survives without the other.
+export type AuditIntent = { action: string; actorUid: string };
 
 export class FamilyService {
   constructor(
@@ -329,7 +334,7 @@ export class FamilyService {
   // Parent-triggered retry of a failed generation: clears stage progress by restarting at
   // ingest (every stage overwrites its state slice in order) with a fresh fence so stale
   // workers cannot commit, and stays bounded.
-  async retryJob(uid: string, jobId: string) {
+  async retryJob(uid: string, jobId: string, audit?: AuditIntent) {
     return this.repo.atomic(async (tx) => {
       const path = familyPath(uid, 'generation_jobs', jobId);
       const job = await tx.get<Job>(path);
@@ -354,6 +359,13 @@ export class FamilyService {
       };
       delete next.error_code;
       tx.put(path, next);
+      if (audit)
+        AuditLog.recordInTx(
+          tx,
+          audit.action,
+          audit.actorUid,
+          `job=${jobId} revision=${next.fence}`,
+        );
       return { retried: true };
     });
   }
@@ -372,6 +384,29 @@ export class FamilyService {
       };
       tx.put(path, approved);
       return approved;
+    });
+  }
+
+  // Moderation (ADR 0016 phase C): archive a lesson record without deleting any
+  // history. Archived lessons leave the kid view and cannot be re-approved, but
+  // the record and its stored revision stay for review and audit.
+  async deactivateLesson(uid: string, id: string, audit?: AuditIntent) {
+    return this.repo.atomic(async (tx) => {
+      const path = familyPath(uid, 'lessons', id);
+      const lesson = await tx.get<LessonRecord>(path);
+      if (!lesson) throw new DomainError('lesson_not_found', 404);
+      await this.active(tx, uid, lesson.kid_id);
+      if (lesson.status === 'archived') return lesson;
+      const archived: LessonRecord = { ...lesson, status: 'archived' };
+      tx.put(path, archived);
+      if (audit)
+        AuditLog.recordInTx(
+          tx,
+          audit.action,
+          audit.actorUid,
+          `lesson=${id} revision=${archived.revision}`,
+        );
+      return archived;
     });
   }
   async deleteKid(uid: string, kidId: string) {

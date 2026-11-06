@@ -263,7 +263,7 @@ export function AdminApp() {
             <ul>
               {family.kids.map((kid) => (
                 <li key={kid.id}>
-                  {kid.nickname} — {kid.state}
+                  <code>{kid.id.slice(0, 8)}</code> — {kid.state}
                 </li>
               ))}
             </ul>
@@ -291,6 +291,19 @@ export function AdminApp() {
           }
         >
           {t.adminView}
+        </button>
+        <button
+          onClick={() =>
+            void run(async () => {
+              const record = await api<{ status: string }>(
+                `/admin/families/${encodeURIComponent(familyId)}/lessons/${encodeURIComponent(lessonId)}/deactivate`,
+                { method: 'POST' },
+              );
+              setLessonJson(`${t.adminDeactivationState}: ${record.status}`);
+            })
+          }
+        >
+          {t.adminDeactivate}
         </button>
         {lessonJson && <pre className="small">{lessonJson}</pre>}
       </section>

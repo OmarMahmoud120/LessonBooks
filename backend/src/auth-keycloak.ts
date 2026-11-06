@@ -138,6 +138,9 @@ export class KeycloakTokens {
     const sid = payload.sid;
     if (typeof uid !== 'string' || !uid) throw new Error('unauthenticated');
     if (typeof sid !== 'string' || !sid) throw new Error('unauthenticated');
+    // Defense-in-depth (security review): the subject reaches asset and document
+    // paths, so hold it to the same alphabet the path builders assume.
+    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(uid)) throw new Error('unauthenticated');
     const claims = payload as { realm_access?: { roles?: unknown } };
     const claimed = claims.realm_access?.roles;
     const roles = Array.isArray(claimed)

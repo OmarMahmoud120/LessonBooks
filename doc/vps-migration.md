@@ -158,13 +158,28 @@ variables and no outbound Cloud Tasks calls.
 Tasks:
 
 - `compose.vps.yaml`: Caddy, site, api, worker, postgres, keycloak, garage, optional
-  signatures updater; private networks; read-only containers; resource limits.
-- Caddy TLS with automatic certificates; only 80/443 public, SSH restricted.
+  signatures updater; private networks; read-only containers; resource limits. It
+  must not publish Postgres on the host (the loopback `5432` mapping exists only for
+  the gated integration tests) and must set the real site origin for API CORS.
+- Caddy TLS with automatic certificates; only 80/443 public, SSH restricted. The API
+  must gain a `trustProxy` setting matching the Caddy subnet before cutover —
+  without it every request shares the proxy IP and all rate-limit buckets collapse
+  into one global budget (security review #1).
+- The runtime-config validators currently hard-require loopback/Compose hostnames
+  and fixed ports (Keycloak issuer, Garage endpoint, Postgres URL). They fail closed
+  rather than accept weak config, which is correct, but the VPS values (https
+  issuer, real hostnames) need deployment-aware validation — new rules, not removed
+  ones (security review #7).
 - PostgreSQL and Garage off-site encrypted backups, retention and restore script.
 - Secrets via Docker secrets/SOPS/Vault, never committed; `.env` remains excluded.
+  Generate and inject the `lessonbooks-admin-panel` client secret; the realm import
+  value is local-only.
 - Monitoring: uptime, disk, memory, backup success, queue depth, failed jobs.
 - Log scrubbing; no book text, tokens, child names or credentials.
 - Patch policy and migration/rollback runbook.
+- Record the registration policy (open/invite-only/admin-created) and email
+  verification before real family data; both are open decisions flagged by the
+  realm configuration (security review informational).
 
 Acceptance: documented restore drill, deletion drill, TLS verification and a
 synthetic end-to-end smoke on the VPS.

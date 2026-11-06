@@ -8,7 +8,7 @@ import {
   type Parent,
   type Usage,
 } from './domain';
-import type { Repository } from './persistence';
+import type { Repository, Transaction } from './persistence';
 
 // Operator audit log (ADR 0016): one entry per admin action, written before the
 // action is answered. The service exposes only record and list — no update or
@@ -31,6 +31,34 @@ const MAX_PRUNES_PER_WRITE = 200;
 export class AuditLog {
   constructor(private repo: Repository) {}
 
+  // Writes the entry inside the caller's transaction so a mutating admin action
+  // and its audit record commit atomically (privacy review M1).
+  static recordInTx(tx: Transaction, action: string, actorUid: string, detail: string): AuditEntry {
+    const entry: AuditEntry = {
+      id: randomUUID(),
+      at: new Date().toISOString(),
+      actor_uid: actorUid,
+      action,
+      detail,
+    };
+    tx.put(`${AUDIT_PATH}/${entry.id}`, entry);
+    return entry;
+  }
+
+  // Bounded retention prune shared by the write and read paths so the window is
+  // enforced even if writes stop (privacy review M2).
+  private static async pruneExpired(
+    list: () => Promise<AuditEntry[]>,
+    remove: (id: string) => Promise<void> | void,
+  ) {
+    const cutoff = new Date(Date.now() - RETENTION_DAYS * 86_400_000).toISOString();
+    const expired = (await list())
+      .filter((candidate) => candidate.at < cutoff)
+      .sort((a, b) => a.at.localeCompare(b.at))
+      .slice(0, MAX_PRUNES_PER_WRITE);
+    for (const stale of expired) await remove(stale.id);
+  }
+
   async record(action: string, actorUid: string, detail: string): Promise<AuditEntry> {
     const entry: AuditEntry = {
       id: randomUUID(),
@@ -41,20 +69,28 @@ export class AuditLog {
     };
     await this.repo.atomic(async (tx) => {
       tx.put(`${AUDIT_PATH}/${entry.id}`, entry);
-      const cutoff = new Date(Date.now() - RETENTION_DAYS * 86_400_000).toISOString();
-      const expired = (await tx.list<AuditEntry>(AUDIT_PATH))
-        .filter((candidate) => candidate.at < cutoff)
-        .sort((a, b) => a.at.localeCompare(b.at))
-        .slice(0, MAX_PRUNES_PER_WRITE);
-      for (const stale of expired) tx.delete(`${AUDIT_PATH}/${stale.id}`);
+      await AuditLog.pruneExpired(
+        () => tx.list<AuditEntry>(AUDIT_PATH),
+        (id) => tx.delete(`${AUDIT_PATH}/${id}`),
+      );
     });
     return entry;
   }
 
-  async list(limit: number): Promise<AuditEntry[]> {
+  async list(limit: number, before?: string): Promise<AuditEntry[]> {
     const bounded = Math.min(Math.max(Math.floor(limit) || DEFAULT_LIMIT, 1), MAX_LIMIT);
+    await AuditLog.pruneExpired(
+      () => this.repo.list<AuditEntry>(AUDIT_PATH),
+      async (id) => {
+        await this.repo.atomic(async (tx) => {
+          tx.delete(`${AUDIT_PATH}/${id}`);
+        });
+      },
+    );
     const entries = await this.repo.list<AuditEntry>(AUDIT_PATH);
-    return entries.sort((a, b) => b.at.localeCompare(a.at)).slice(0, bounded);
+    // `before` paginates: strictly older entries only, newest first.
+    const visible = before ? entries.filter((entry) => entry.at < before) : entries;
+    return visible.sort((a, b) => b.at.localeCompare(a.at)).slice(0, bounded);
   }
 }
 
@@ -93,8 +129,17 @@ export class AdminOps {
   constructor(
     private repo: Repository,
     private families: {
-      retryJob(uid: string, jobId: string): Promise<unknown>;
+      retryJob(
+        uid: string,
+        jobId: string,
+        audit?: { action: string; actorUid: string },
+      ): Promise<unknown>;
       lesson(uid: string, id: string): Promise<{ record: LessonRecord; lesson: unknown }>;
+      deactivateLesson(
+        uid: string,
+        id: string,
+        audit?: { action: string; actorUid: string },
+      ): Promise<LessonRecord>;
     },
     private identityExists?: (uid: string) => Promise<boolean>,
   ) {}
@@ -128,11 +173,14 @@ export class AdminOps {
     return all.sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, bounded);
   }
 
-  async retryJob(jobId: string): Promise<{ retried: true }> {
+  async retryJob(
+    jobId: string,
+    audit?: { action: string; actorUid: string },
+  ): Promise<{ retried: true }> {
     for (const uid of await this.familyUids()) {
       const job = await this.repo.get<Job>(familyPath(uid, 'generation_jobs', jobId));
       if (job) {
-        await this.families.retryJob(uid, jobId);
+        await this.families.retryJob(uid, jobId, audit);
         return { retried: true };
       }
     }
@@ -177,12 +225,17 @@ export class AdminOps {
   // Support and moderation (ADR 0016 phase C): lookups are by parent identifier,
   // never by child nickname, and never create state. The parent credential hash
   // never leaves the server.
+  // Minimization (privacy review): no PIN credential metadata leaves the server.
   private static parentView(parent: Parent) {
-    const { pin_hash: _pin_hash, ...view } = parent;
-    return view;
+    const view: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(parent))
+      if (!key.startsWith('pin_')) view[key] = value;
+    view.pin_set = Boolean(parent.pin_hash);
+    return view as Parent & { pin_set: boolean };
   }
 
   private static familyCollections = [
+    'kids',
     'consent_records',
     'books',
     'generation_jobs',
@@ -204,9 +257,10 @@ export class AdminOps {
     const consents = await this.repo.list(familyPath(uid, 'consent_records'));
     return {
       parent: AdminOps.parentView(parent),
+      // Minimization: identifiers and state only; nicknames stay out of operator
+      // responses (privacy review L4).
       kids: kids.map((kid) => ({
         id: kid.id,
-        nickname: kid.nickname,
         avatar: kid.avatar,
         state: kid.state,
       })),
@@ -248,5 +302,13 @@ export class AdminOps {
   async lessonView(uid: string, lessonId: string) {
     const { record, lesson } = await this.families.lesson(uid, lessonId);
     return { record, lesson };
+  }
+
+  async deactivateLesson(
+    uid: string,
+    lessonId: string,
+    audit?: { action: string; actorUid: string },
+  ) {
+    return this.families.deactivateLesson(uid, lessonId, audit);
   }
 }

@@ -204,3 +204,58 @@ it('keeps the documented 5/hour rate limits by default and bounds overrides', ()
       'invalid_rate_limit',
     );
 });
+it('defaults to Firestore and accepts a loopback or Compose Postgres URL', () => {
+  const config = runtimeConfig(keycloakEnv);
+  expect(config.repository).toBe('firestore');
+  expect(config.postgres).toBeUndefined();
+  const postgres = runtimeConfig({
+    ...keycloakEnv,
+    REPOSITORY: 'postgres',
+    POSTGRES_URL:
+      'postgres://lessonbooks:local-only-documents-db-password@postgres:5432/lessonbooks',
+  });
+  expect(postgres.repository).toBe('postgres');
+  expect(postgres.postgres).toEqual({
+    url: 'postgres://lessonbooks:local-only-documents-db-password@postgres:5432/lessonbooks',
+  });
+  expect(
+    runtimeConfig({
+      ...keycloakEnv,
+      REPOSITORY: 'postgres',
+      POSTGRES_URL: 'postgres://lessonbooks:pw@127.0.0.1:5432/lessonbooks',
+    }).repository,
+  ).toBe('postgres');
+});
+it.each([
+  ['postgres://lessonbooks:pw@db.internal:5432/lessonbooks', 'invalid_postgres_url'],
+  ['postgres://lessonbooks@postgres:5432/lessonbooks', 'invalid_postgres_url'],
+  ['postgres://lessonbooks:pw@postgres:5432/lessonbooks?sslmode=disable', 'invalid_postgres_url'],
+  ['postgresql://lessonbooks:pw@postgres:5432/lessonbooks', 'invalid_postgres_url'],
+])('validates the Postgres URL %s', (url, expected) => {
+  if (expected === 'invalid_postgres_url' && url.startsWith('postgresql://')) {
+    expect(() =>
+      runtimeConfig({ ...keycloakEnv, REPOSITORY: 'postgres', POSTGRES_URL: url }),
+    ).not.toThrow();
+    return;
+  }
+  expect(() =>
+    runtimeConfig({ ...keycloakEnv, REPOSITORY: 'postgres', POSTGRES_URL: url }),
+  ).toThrow(expected);
+});
+it('rejects unknown repository names and Postgres in the GCP cloud runtime', () => {
+  expect(() => runtimeConfig({ ...keycloakEnv, REPOSITORY: 'mongo' })).toThrow(
+    'invalid_repository',
+  );
+  expect(() =>
+    runtimeConfig({
+      REPOSITORY: 'postgres',
+      POSTGRES_URL: 'postgres://lessonbooks:pw@postgres:5432/lessonbooks',
+      CLOUD_RUNTIME_APPROVED: 'true',
+      NODE_ENV: 'production',
+      GCP_PROJECT_ID: 'proj',
+      CLOUD_TASKS_QUEUE: 'q',
+      WORKER_URL: 'https://worker.example.com',
+      WORKER_SERVICE_ACCOUNT: 'worker@proj.iam.gserviceaccount.com',
+    }),
+  ).toThrow('postgres_not_supported_in_cloud_mode');
+});

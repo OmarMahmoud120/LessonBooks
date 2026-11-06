@@ -128,11 +128,18 @@ for the dashboard progress card not loading after a reload. `POST /v1/parent/pin
 stays rate-limited to 5 requests per hour per client IP, which bounds local
 browser-test repeatability (see [verification.md](verification.md)).
 
-Real-PostgreSQL transaction verification, Firestore-to-Postgres wiring, polling
-dispatch changes, VPS provisioning and mobile-device login remain open. No VPS was
-provisioned, no data was migrated, and no live model or family-data use is
-authorized. Firestore still stores family documents and Cloud Tasks remains the
-cloud dispatch path. See [vps-migration.md](vps-migration.md).
+Phase 4 cut the Compose runtime over to Postgres (2026-11-06): `REPOSITORY=postgres`
+wires `PostgresRepository` with a validated connection URL, Firebase initializes only
+when a Firebase surface is actually selected, the documents table pins `COLLATE "C"`,
+and the real-Postgres behaviors pg-mem could not prove (rollback, serializable
+conflict retries with backoff, byte-level edge cases) are covered by a gated
+integration suite. `npm run docker:test` passed the full journey on Postgres and the
+browser suite passed on the cut-over stack; see
+[verification.md](verification.md). The GCP cloud runtime keeps Firestore and Cloud
+Tasks unchanged and rejects Postgres. Real-PostgreSQL transaction verification is
+done; VPS provisioning and mobile-device login remain open. No VPS was provisioned,
+no data was migrated, and no live model or family-data use is authorized. See
+[vps-migration.md](vps-migration.md).
 
 ## Admin panel — 2026-11-06
 

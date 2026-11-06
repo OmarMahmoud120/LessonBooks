@@ -70,6 +70,36 @@ services:
       timeout: 5s
       retries: 12
       start_period: 10s
+  # Document store for the self-hosted runtime (ADR 0013 phase 4). Synthetic
+  # local-only credentials; a VPS deployment must generate and inject its own.
+  postgres:
+    image: postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
+    init: true
+    # The official entrypoint drops from root to the postgres user and fixes
+    # ownership of the data volume, so those capabilities are required.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+    environment:
+      POSTGRES_DB: lessonbooks
+      POSTGRES_USER: lessonbooks
+      POSTGRES_PASSWORD: ${DOCUMENTS_DB_PASSWORD:-local-only-documents-db-password}
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+    volumes:
+      - documents-db-data:/var/lib/postgresql/data
+    # Loopback exposure exists only for the gated real-Postgres integration tests;
+    # the local network carries the published port, the private one the traffic.
+    ports:
+      - '127.0.0.1:5432:5432'
+    networks: [private, local]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U lessonbooks -d lessonbooks']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
   keycloak:
     image: quay.io/keycloak/keycloak:26.0@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
     init: true
@@ -158,6 +188,10 @@ services:
       S3_ACCESS_KEY_ID: ${GARAGE_DEFAULT_ACCESS_KEY:-GK0123456789abcdef0123456789abcdef}
       S3_SECRET_ACCESS_KEY: ${GARAGE_DEFAULT_SECRET_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
       AUTH_PROVIDER: keycloak
+      # Self-hosted document store (ADR 0013 phase 4): Postgres replaces Firestore
+      # in the Compose runtime; Firestore stays the default where REPOSITORY is unset.
+      REPOSITORY: postgres
+      POSTGRES_URL: postgres://lessonbooks:${DOCUMENTS_DB_PASSWORD:-local-only-documents-db-password}@postgres:5432/lessonbooks
       # Local-only rate-limit bump for browser-test repeatability; the documented
       # 5/hour defaults still apply wherever these variables are unset (VPS).
       RATE_LIMIT_PIN_PER_HOUR: '50'
@@ -174,6 +208,7 @@ services:
       emulators: { condition: service_healthy }
       garage: { condition: service_healthy }
       keycloak: { condition: service_healthy }
+      postgres: { condition: service_healthy }
     develop:
       watch:
         - { action: rebuild, path: backend/src }
@@ -192,6 +227,7 @@ services:
       emulators: { condition: service_healthy }
       garage: { condition: service_healthy }
       keycloak: { condition: service_healthy }
+      postgres: { condition: service_healthy }
       signatures: { condition: service_completed_successfully }
     develop:
       watch:
@@ -206,3 +242,4 @@ volumes:
   scanner-data: {}
   garage-data: {}
   keycloak-db-data: {}
+  documents-db-data: {}

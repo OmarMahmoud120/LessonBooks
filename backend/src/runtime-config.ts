@@ -29,6 +29,8 @@ export type RuntimeConfig = {
   ocrMaxRequests: number;
   auth: AuthConfig;
   assets: AssetConfig;
+  repository: 'firestore' | 'postgres';
+  postgres: { url: string } | undefined;
   limits: { pinPerHour: number; uploadsPerHour: number };
   endpoints: Record<string, string>;
   projectId?: string;
@@ -142,6 +144,33 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
   const mode: RuntimeMode = env.CLOUD_RUNTIME_APPROVED === 'true' ? 'cloud' : 'emulator';
   const assets: AssetConfig = assetStore === 's3' ? s3Assets(env, mode) : { kind: 'firebase' };
   const auth = keycloakAuth(env, mode);
+  // Document-store selection (ADR 0013 phase 4): Firestore stays the default until
+  // the cutover is declared; Postgres requires an explicit connection URL whose host
+  // is a loopback or known Compose service in the emulator runtime. The GCP cloud
+  // runtime keeps Firestore and does not accept Postgres yet.
+  const repository = env.REPOSITORY ?? 'firestore';
+  if (repository !== 'firestore' && repository !== 'postgres')
+    throw new Error('invalid_repository');
+  let postgres: { url: string } | undefined;
+  if (repository === 'postgres') {
+    if (mode === 'cloud') throw new Error('postgres_not_supported_in_cloud_mode');
+    let url: URL;
+    try {
+      url = new URL(env.POSTGRES_URL ?? '');
+    } catch {
+      throw new Error('invalid_postgres_url');
+    }
+    if (
+      !['postgres:', 'postgresql:'].includes(url.protocol) ||
+      url.username === '' ||
+      url.password === '' ||
+      url.search ||
+      url.hash ||
+      !['127.0.0.1', 'localhost', 'postgres'].includes(url.hostname)
+    )
+      throw new Error('invalid_postgres_url');
+    postgres = { url: env.POSTGRES_URL! };
+  }
   let ocrMaxRequests = 0;
   if (ocrProvider === 'cloudflare') {
     // The selectable hosted path is restricted to owned fixtures in the emulator runtime.
@@ -225,6 +254,8 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
       ocrMaxRequests,
       auth,
       assets,
+      repository: 'firestore' as const,
+      postgres: undefined,
       limits,
       endpoints: {},
       projectId,
@@ -258,6 +289,8 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
     ocrMaxRequests,
     auth,
     assets,
+    repository,
+    postgres,
     limits,
     endpoints,
   };

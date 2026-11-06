@@ -320,7 +320,11 @@ describe('ops monitor', () => {
     expect(retried.json()).toEqual({ retried: true });
     const job = await repo.get<{ status: string; manual_retries?: number }>(path);
     expect(job).toMatchObject({ status: 'queued', manual_retries: 1 });
-    expect((await audit.list(10)).some((entry) => entry.action === 'admin.job.retry')).toBe(true);
+    const retryEntry = (await audit.list(10)).find((entry) => entry.action === 'admin.job.retry');
+    expect(retryEntry).toMatchObject({
+      actor_uid: 'operator-1',
+      detail: expect.stringContaining('job='),
+    });
 
     const running = await app.inject({
       method: 'POST',
@@ -446,9 +450,12 @@ describe('support and moderation', () => {
     });
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    expect(body.parent).toMatchObject({ id: 'alice', state: 'active' });
+    expect(body.parent).toMatchObject({ id: 'alice', state: 'active', pin_set: false });
     expect(body.parent.pin_hash).toBeUndefined();
-    expect(body.kids[0]).toMatchObject({ nickname: kidInput.nickname });
+    expect(body.parent.pin_salt).toBeUndefined();
+    expect(body.parent.pin_failed_count).toBeUndefined();
+    expect(body.kids[0]).toMatchObject({ avatar: kidInput.avatar, state: 'active' });
+    expect(body.kids[0].nickname).toBeUndefined();
     expect(body.consents).toHaveLength(2);
     // Only the audit entry may appear: the lookup itself must not create family state.
     const familyPathsAfter = [...repo.documents.keys()].filter((path) =>
@@ -480,6 +487,7 @@ describe('support and moderation', () => {
     const body = response.json();
     expect(body.parent.id).toBe('alice');
     expect(body.parent.pin_hash).toBeUndefined();
+    expect(body.kids).toHaveLength(1);
     expect(body.books).toHaveLength(1);
     expect(body.generation_jobs).toHaveLength(1);
     expect(body.consent_records).toHaveLength(2);
@@ -507,7 +515,7 @@ describe('support and moderation', () => {
     });
     const body = deleted.json();
     expect(body.parent_state).toBe('deleted');
-    expect(Object.values(body.counts)).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    expect(Object.values(body.counts)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
     expect(body.identity_exists).toBe(false);
     expect(repo.documents.has('parents/alice')).toBe(true);
     expect((await audit.list(5))[0]).toMatchObject({ action: 'admin.family.deletion_check' });
@@ -571,5 +579,85 @@ describe('support and moderation', () => {
       const denied = await parent.app.inject({ method: 'GET', url, headers: bearer });
       expect(denied.statusCode).toBe(403);
     }
+  });
+});
+
+describe('audit pagination and moderation', () => {
+  const bearer = { authorization: 'Bearer token' };
+
+  it('paginates the audit log with the before cursor', async () => {
+    const { app, audit } = await opsApp();
+    for (let index = 0; index < 4; index++) {
+      await audit.record('admin.a.page', 'operator-1', String(index));
+      // Distinct timestamps so pagination has a strict order to walk.
+      const latest = (await audit.list(1))[0]!;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      void latest;
+    }
+    const firstPage = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/audit?limit=3',
+      headers: bearer,
+    });
+    const entries = firstPage.json().entries as { at: string }[];
+    expect(entries).toHaveLength(3);
+    const secondPage = await app.inject({
+      method: 'GET',
+      url: `/v1/admin/audit?limit=3&before=${encodeURIComponent(entries[entries.length - 1]!.at)}`,
+      headers: bearer,
+    });
+    const older = secondPage.json().entries as { at: string }[];
+    expect(older.length).toBeGreaterThanOrEqual(1);
+    expect(older.every((entry) => entry.at < entries[entries.length - 1]!.at)).toBe(true);
+  });
+
+  it('archives an approved lesson for moderation and keeps the record', async () => {
+    const { app, audit, repo, assets, aliceKid } = await opsApp();
+    const lesson = JSON.parse(readFileSync('doc/fixtures/lessons/math.json', 'utf8'));
+    const storagePath = 'families/alice/lessons/mod-1.json';
+    await assets.put(storagePath, Buffer.from(JSON.stringify(lesson)));
+    await repo.atomic(async (tx) => {
+      tx.put('parents/alice/lessons/mod-1', {
+        id: 'mod-1',
+        kid_id: aliceKid.id,
+        book_id: 'book-1',
+        revision: 2,
+        order: 1,
+        status: 'approved',
+        schema_version: '1.0.0',
+        storage_path: storagePath,
+        summary: 'Counting together',
+      });
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/families/alice/lessons/mod-1/deactivate',
+      headers: bearer,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ id: 'mod-1', status: 'archived', revision: 2 });
+    // Idempotent: a second call returns the archived record unchanged.
+    const again = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/families/alice/lessons/mod-1/deactivate',
+      headers: bearer,
+    });
+    expect(again.json()).toMatchObject({ status: 'archived' });
+    // The stored JSON stays readable for review after archiving.
+    const view = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/families/alice/lessons/mod-1',
+      headers: bearer,
+    });
+    expect(view.statusCode).toBe(200);
+    expect((await audit.list(10)).some((entry) => entry.action === 'admin.lesson.deactivate')).toBe(
+      true,
+    );
+    const unknown = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/families/alice/lessons/missing/deactivate',
+      headers: bearer,
+    });
+    expect(unknown.statusCode).toBe(404);
   });
 });
