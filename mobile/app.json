@@ -4,6 +4,7 @@
     "slug": "lessonbooks",
     "version": "0.1.0",
     "orientation": "portrait",
+    "scheme": "lessonbooks",
     "ios": { "supportsTablet": true },
     "android": { "package": "com.lessonbooks.preview" },
     "updates": { "enabled": false }
