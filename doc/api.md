@@ -26,6 +26,13 @@ Parent requests use Authorization: Bearer <access token>. The default provider i
 | POST /v1/events              | up to 50 schema-validated play events; idempotent     |
 | GET /v1/kids/:id/progress    | per-kid events aggregate for the dashboard            |
 
+Admin routes (ADR 0016) live under `/v1/admin/*` for identities holding the
+`lessonbooks-admin` realm role with a recent interactive login; every action is
+recorded in the append-only audit log: job list and retry, AI usage totals, audit
+read, family overview, subject-access export, deletion verification and a read-only
+lesson JSON view. They never create family state and never expose credential
+material.
+
 Use non-guessable IDs plus ownership checks. Reject unknown request fields, unsupported locale/curriculum combinations and invalid references. Upload type/magic, byte/page limits and rate limiting apply before costly parsing/model calls. A supplied idempotency key is scoped to parent and operation. Errors return safe codes, never raw provider responses or stack traces.
 
 The private worker endpoint requires a Cloud Tasks OIDC service identity and cannot be reached using a parent token. Site/mobile progress events are validated by the shared event schema and persisted per kid; the API derives kid identity from the lesson record, rejects revision mismatches and deduplicates by event_id, so this is not an unauthenticated ingestion shortcut. Event batches are capped at 50 and rate-limited.

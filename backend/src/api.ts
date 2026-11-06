@@ -41,6 +41,7 @@ export async function createAPI(
   verify: (token: string) => Promise<Identity>,
   audit?: AuditLog,
   ops?: AdminOps,
+  limits = { pinPerHour: 5, uploadsPerHour: 5 },
 ) {
   const app = Fastify({
     logger: false,
@@ -177,7 +178,7 @@ export async function createAPI(
   app.post<{ Body: { pin: string } }>(
     '/v1/parent/pin',
     {
-      config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
+      config: { rateLimit: { max: limits.pinPerHour, timeWindow: '1 hour' } },
       schema: { body: pinSchema },
     },
     async (request) => {
@@ -198,7 +199,7 @@ export async function createAPI(
   app.post<{ Querystring: { kid_id: string } }>(
     '/v1/books',
     {
-      config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
+      config: { rateLimit: { max: limits.uploadsPerHour, timeWindow: '1 hour' } },
       schema: {
         querystring: {
           type: 'object',
@@ -411,6 +412,73 @@ export async function createAPI(
         );
         return totals;
       });
+      // Support and moderation reads (ADR 0016 phase C): by parent identifier,
+      // read-only, never creating state, always audited.
+      app.get<{ Params: { id: string } }>(
+        '/v1/admin/families/:id',
+        { schema: { params: idSchema } },
+        async (request) => {
+          const identity = adminIdentity(request);
+          await requireRecentAuth(identity);
+          const overview = await ops.familyOverview(request.params.id);
+          await audit?.record(
+            'admin.family.view',
+            identity.uid,
+            `family=${request.params.id} kids=${overview.kids.length}`,
+          );
+          return overview;
+        },
+      );
+      app.get<{ Params: { id: string } }>(
+        '/v1/admin/families/:id/export',
+        { schema: { params: idSchema } },
+        async (request) => {
+          const identity = adminIdentity(request);
+          await requireRecentAuth(identity);
+          const exportData = await ops.exportFamily(request.params.id);
+          await audit?.record('admin.family.export', identity.uid, `family=${request.params.id}`);
+          return exportData;
+        },
+      );
+      app.get<{ Params: { id: string } }>(
+        '/v1/admin/families/:id/deletion-check',
+        { schema: { params: idSchema } },
+        async (request) => {
+          const identity = adminIdentity(request);
+          await requireRecentAuth(identity);
+          const check = await ops.deletionCheck(request.params.id);
+          await audit?.record(
+            'admin.family.deletion_check',
+            identity.uid,
+            `family=${request.params.id} state=${check.parent_state} identity_exists=${check.identity_exists}`,
+          );
+          return check;
+        },
+      );
+      app.get<{ Params: { id: string; lessonId: string } }>(
+        '/v1/admin/families/:id/lessons/:lessonId',
+        {
+          schema: {
+            params: {
+              type: 'object',
+              properties: { id: idSchema.properties.id, lessonId: idSchema.properties.id },
+              required: ['id', 'lessonId'],
+              additionalProperties: false,
+            },
+          },
+        },
+        async (request) => {
+          const identity = adminIdentity(request);
+          await requireRecentAuth(identity);
+          const view = await ops.lessonView(request.params.id, request.params.lessonId);
+          await audit?.record(
+            'admin.lesson.view',
+            identity.uid,
+            `family=${request.params.id} lesson=${request.params.lessonId}`,
+          );
+          return view;
+        },
+      );
     }
   }
   return app;

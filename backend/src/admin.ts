@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { DomainError, familyPath, type Job, type Parent, type Usage } from './domain';
+import {
+  DomainError,
+  familyPath,
+  type Job,
+  type Kid,
+  type LessonRecord,
+  type Parent,
+  type Usage,
+} from './domain';
 import type { Repository } from './persistence';
 
 // Operator audit log (ADR 0016): one entry per admin action, written before the
@@ -84,7 +92,11 @@ export type UsageTotals = {
 export class AdminOps {
   constructor(
     private repo: Repository,
-    private families: { retryJob(uid: string, jobId: string): Promise<unknown> },
+    private families: {
+      retryJob(uid: string, jobId: string): Promise<unknown>;
+      lesson(uid: string, id: string): Promise<{ record: LessonRecord; lesson: unknown }>;
+    },
+    private identityExists?: (uid: string) => Promise<boolean>,
   ) {}
 
   private async familyUids(): Promise<string[]> {
@@ -160,5 +172,81 @@ export class AdminOps {
       ),
       totals,
     };
+  }
+
+  // Support and moderation (ADR 0016 phase C): lookups are by parent identifier,
+  // never by child nickname, and never create state. The parent credential hash
+  // never leaves the server.
+  private static parentView(parent: Parent) {
+    const { pin_hash: _pin_hash, ...view } = parent;
+    return view;
+  }
+
+  private static familyCollections = [
+    'consent_records',
+    'books',
+    'generation_jobs',
+    'lessons',
+    'assignments',
+    'progress_events',
+    'lesson_results',
+  ] as const;
+
+  private async parentDoc(uid: string): Promise<Parent> {
+    const parent = await this.repo.get<Parent>(familyPath(uid));
+    if (!parent) throw new DomainError('family_not_found', 404);
+    return parent;
+  }
+
+  async familyOverview(uid: string) {
+    const parent = await this.parentDoc(uid);
+    const kids = await this.repo.list<Kid>(familyPath(uid, 'kids'));
+    const consents = await this.repo.list(familyPath(uid, 'consent_records'));
+    return {
+      parent: AdminOps.parentView(parent),
+      kids: kids.map((kid) => ({
+        id: kid.id,
+        nickname: kid.nickname,
+        avatar: kid.avatar,
+        state: kid.state,
+      })),
+      consents: consents.map((consent) => ({
+        type: (consent as { type?: string }).type,
+        granted_at: (consent as { granted_at?: string }).granted_at,
+      })),
+    };
+  }
+
+  async exportFamily(uid: string) {
+    const parent = await this.parentDoc(uid);
+    const collections: Record<string, unknown[]> = {};
+    for (const name of AdminOps.familyCollections)
+      collections[name] = await this.repo.list(familyPath(uid, name));
+    return { parent: AdminOps.parentView(parent), ...collections };
+  }
+
+  async deletionCheck(uid: string) {
+    const parent = await this.repo.get<Parent>(familyPath(uid));
+    const counts: Record<string, number> = {};
+    for (const name of AdminOps.familyCollections)
+      counts[name] = (await this.repo.list(familyPath(uid, name))).length;
+    let identity_exists: boolean | null = null;
+    if (this.identityExists) {
+      try {
+        identity_exists = await this.identityExists(uid);
+      } catch {
+        identity_exists = null;
+      }
+    }
+    return {
+      parent_state: parent?.state ?? 'absent',
+      counts,
+      identity_exists,
+    };
+  }
+
+  async lessonView(uid: string, lessonId: string) {
+    const { record, lesson } = await this.families.lesson(uid, lessonId);
+    return { record, lesson };
   }
 }

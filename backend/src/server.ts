@@ -61,7 +61,22 @@ const families = new FamilyService(repo, assets, async (uid) => {
 });
 const pipeline = new Pipeline(families, ingestor, new RoutedAI(new MockModelClient(), mockPolicy));
 const audit = new AuditLog(repo);
-const ops = new AdminOps(repo, families);
+// Deletion verification asks the identity provider directly; both providers can
+// answer whether a uid still exists, and neither result is cached here.
+const identityExists = keycloak
+  ? (uid: string) => keycloak.admin.userExists(uid)
+  : firebaseAuth
+    ? async (uid: string) => {
+        try {
+          await firebaseAuth!.getUser(uid);
+          return true;
+        } catch (error) {
+          if ((error as { code?: string }).code === 'auth/user-not-found') return false;
+          throw error;
+        }
+      }
+    : undefined;
+const ops = new AdminOps(repo, families, identityExists);
 const app =
   config.mode === 'cloud' && config.role === 'worker'
     ? createWorkerApp(
@@ -69,10 +84,10 @@ const app =
         new CloudTasksOidcVerifier(config.workerUrl!, config.workerServiceAccount!),
       )
     : config.mode === 'cloud' && config.role === 'api'
-      ? await createAPI(families, verifyToken, audit, ops)
+      ? await createAPI(families, verifyToken, audit, ops, config.limits)
       : config.role === 'worker'
         ? Fastify({ logger: false })
-        : await createAPI(families, verifyToken, audit, ops);
+        : await createAPI(families, verifyToken, audit, ops, config.limits);
 if (config.role === 'worker' && config.mode === 'emulator')
   app.get('/health', async () => ({ status: 'ok', mode: 'mock-worker' }));
 let running = false;

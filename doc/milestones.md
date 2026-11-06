@@ -141,13 +141,18 @@ Decision recorded in
 operators are a separate role-gated, audited account class on the existing Keycloak
 realm, the panel is a route in `site/` behind Caddy on the same VPS, and the
 append-only audit log ships before any capability. Phase A (identity, `/v1/admin/*`
-plumbing, audit log) and Phase B (ops visibility: cross-family job list, failed-job
-retry, AI usage totals, and the 400-day audit retention decision) are implemented
-and verified — see [verification.md](verification.md). The monitor runs on the
+plumbing, audit log), Phase B (ops visibility: cross-family job list, failed-job
+retry, AI usage totals, and the 400-day audit retention decision) and the Phase C
+support reads (family overview, subject-access export, deletion verification across
+the repository and the identity provider, read-only lesson JSON) plus the `/admin`
+panel route in `site/` are implemented and verified — see
+[verification.md](verification.md). Rate limits for PIN set and uploads are
+env-tunable with the 5/hour defaults unchanged. The monitor runs on the
 storage-agnostic `Repository`, so the Postgres cutover swaps the driver underneath
-it; the cutover still gates the runtime switchover. The panel UI and Phase C
-(moderation and support) remain unbuilt. Parent impersonation is rejected. Every
-admin-surface change requires the privacy-review skill before merge.
+it; the cutover still gates the runtime switchover. Still unbuilt: audit
+export/pagination, storage-prefix deletion verification, moderation actions, and
+the VPS provisioning items. Parent impersonation is rejected. Every admin-surface
+change requires the privacy-review skill before merge.
 
 ## Android native attempt — 2026-11-04
 

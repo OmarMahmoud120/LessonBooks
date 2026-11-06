@@ -158,6 +158,10 @@ services:
       S3_ACCESS_KEY_ID: ${GARAGE_DEFAULT_ACCESS_KEY:-GK0123456789abcdef0123456789abcdef}
       S3_SECRET_ACCESS_KEY: ${GARAGE_DEFAULT_SECRET_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
       AUTH_PROVIDER: keycloak
+      # Local-only rate-limit bump for browser-test repeatability; the documented
+      # 5/hour defaults still apply wherever these variables are unset (VPS).
+      RATE_LIMIT_PIN_PER_HOUR: '50'
+      RATE_LIMIT_UPLOADS_PER_HOUR: '50'
       KEYCLOAK_ISSUER: ${KEYCLOAK_PUBLIC_URL:-http://127.0.0.1:8081}/realms/lessonbooks
       KEYCLOAK_BACKCHANNEL_URL: http://keycloak:8080
       KEYCLOAK_AUDIENCE: lessonbooks-api

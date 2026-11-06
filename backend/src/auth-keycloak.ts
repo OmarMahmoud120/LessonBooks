@@ -83,6 +83,14 @@ export class KeycloakAdmin {
     if (!response.ok) throw new Error('keycloak_user_delete_failed');
   }
 
+  // Deletion verification (ADR 0016 phase C): reports whether the identity survived.
+  async userExists(uid: string): Promise<boolean> {
+    const response = await this.request(`/users/${encodeURIComponent(uid)}`);
+    if (response.status === 404) return false;
+    if (!response.ok) throw new Error('keycloak_user_lookup_failed');
+    return true;
+  }
+
   // Returns the SSO session start in epoch seconds, which survives token refresh.
   async sessionStart(uid: string, sid: string): Promise<number> {
     const response = await this.request(`/users/${encodeURIComponent(uid)}/sessions`);

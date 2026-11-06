@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { createAPI, type Identity } from '../src/api';
 import { AdminOps, AuditLog, type AuditEntry } from '../src/admin';
 import { FamilyService } from '../src/family';
@@ -22,7 +23,8 @@ async function adminApp(operator: Identity) {
 
 async function opsApp(operator: Identity = identity()) {
   const repo = new MemoryRepository();
-  const family = new FamilyService(repo, new MemoryAssets());
+  const assets = new MemoryAssets();
+  const family = new FamilyService(repo, assets);
   const aliceKid = await (async () => {
     await family.ensureParent('alice');
     await family.consent('alice', 'privacy');
@@ -47,10 +49,37 @@ async function opsApp(operator: Identity = identity()) {
     Buffer.from('%PDF-1.7 synthetic'),
     'ops-key-bob-001',
   );
+  // Distinct timestamps: same-millisecond uploads have no defined listing order.
+  await repo.atomic(async (tx) => {
+    const bob = await tx.get<{ created_at: string }>(
+      `parents/bob/generation_jobs/${bobJob.job_id}`,
+    );
+    tx.put(`parents/bob/generation_jobs/${bobJob.job_id}`, {
+      ...bob,
+      created_at: new Date(Date.now() - 3_600_000).toISOString(),
+    });
+  });
   const audit = new AuditLog(repo);
-  const ops = new AdminOps(repo, family);
+  let identityExists: ((uid: string) => Promise<boolean>) | undefined;
+  const ops = new AdminOps(repo, family, (uid) =>
+    identityExists ? identityExists(uid) : Promise.resolve(false),
+  );
   const app = await createAPI(family, async () => operator, audit, ops);
-  return { app, audit, ops, repo, family, aliceJob, bobJob };
+  return {
+    app,
+    audit,
+    ops,
+    repo,
+    family,
+    assets,
+    aliceJob,
+    bobJob,
+    aliceKid,
+    bobKid,
+    setIdentityExists: (fn?: (uid: string) => Promise<boolean>) => {
+      identityExists = fn;
+    },
+  };
 }
 
 const day = 86_400_000;
@@ -399,5 +428,148 @@ describe('ops monitor', () => {
     });
     expect(rejected.statusCode).toBe(401);
     expect(rejected.json()).toMatchObject({ error: 'recent_auth_required' });
+  });
+});
+
+describe('support and moderation', () => {
+  const bearer = { authorization: 'Bearer token' };
+
+  it('views a family by identifier without creating state or exposing the pin hash', async () => {
+    const { app, audit, repo } = await opsApp();
+    const familyPathsBefore = [...repo.documents.keys()].filter((path) =>
+      path.startsWith('parents/'),
+    ).length;
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/families/alice',
+      headers: bearer,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.parent).toMatchObject({ id: 'alice', state: 'active' });
+    expect(body.parent.pin_hash).toBeUndefined();
+    expect(body.kids[0]).toMatchObject({ nickname: kidInput.nickname });
+    expect(body.consents).toHaveLength(2);
+    // Only the audit entry may appear: the lookup itself must not create family state.
+    const familyPathsAfter = [...repo.documents.keys()].filter((path) =>
+      path.startsWith('parents/'),
+    ).length;
+    expect(familyPathsAfter).toBe(familyPathsBefore);
+    expect((await audit.list(5))[0]).toMatchObject({ action: 'admin.family.view' });
+  });
+
+  it('does not create families that do not exist', async () => {
+    const { app } = await opsApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/families/ghost',
+      headers: bearer,
+    });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({ error: 'family_not_found' });
+  });
+
+  it('exports every family collection', async () => {
+    const { app } = await opsApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/families/alice/export',
+      headers: bearer,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.parent.id).toBe('alice');
+    expect(body.parent.pin_hash).toBeUndefined();
+    expect(body.books).toHaveLength(1);
+    expect(body.generation_jobs).toHaveLength(1);
+    expect(body.consent_records).toHaveLength(2);
+    expect(body.lesson_results).toEqual([]);
+  });
+
+  it('reports deletion state across the repository and the identity provider', async () => {
+    const { app, audit, repo, family, setIdentityExists } = await opsApp();
+    setIdentityExists(async () => true);
+    const active = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/families/alice/deletion-check',
+      headers: bearer,
+    });
+    expect(active.json()).toMatchObject({ parent_state: 'active', identity_exists: true });
+    const activeCounts = active.json().counts as Record<string, number>;
+    expect(Object.values(activeCounts).every((count) => count >= 0)).toBe(true);
+
+    setIdentityExists(async () => false);
+    await family.deleteAccount('alice');
+    const deleted = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/families/alice/deletion-check',
+      headers: bearer,
+    });
+    const body = deleted.json();
+    expect(body.parent_state).toBe('deleted');
+    expect(Object.values(body.counts)).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    expect(body.identity_exists).toBe(false);
+    expect(repo.documents.has('parents/alice')).toBe(true);
+    expect((await audit.list(5))[0]).toMatchObject({ action: 'admin.family.deletion_check' });
+  });
+
+  it('reports an absent family and an unknown provider state without failing', async () => {
+    const { app } = await opsApp();
+    const absent = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/families/ghost/deletion-check',
+      headers: bearer,
+    });
+    expect(absent.statusCode).toBe(200);
+    expect(absent.json()).toMatchObject({ parent_state: 'absent', identity_exists: false });
+  });
+
+  it('shows lesson JSON read-only for moderation', async () => {
+    const { app, audit, repo, assets, aliceKid } = await opsApp();
+    const lesson = JSON.parse(readFileSync('doc/fixtures/lessons/math.json', 'utf8'));
+    const storagePath = 'families/alice/lessons/lesson-1.json';
+    await assets.put(storagePath, Buffer.from(JSON.stringify(lesson)));
+    await repo.atomic(async (tx) => {
+      tx.put('parents/alice/lessons/lesson-1', {
+        id: 'lesson-1',
+        kid_id: aliceKid.id,
+        book_id: 'book-1',
+        revision: 1,
+        order: 1,
+        status: 'approved',
+        schema_version: '1.0.0',
+        storage_path: storagePath,
+        summary: 'Counting together',
+      });
+    });
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/families/alice/lessons/lesson-1',
+      headers: bearer,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.record).toMatchObject({ id: 'lesson-1', status: 'approved', revision: 1 });
+    expect(body.lesson).toHaveProperty('metadata');
+    const unknown = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/families/alice/lessons/missing',
+      headers: bearer,
+    });
+    expect(unknown.statusCode).toBe(404);
+    expect((await audit.list(5))[0]).toMatchObject({ action: 'admin.lesson.view' });
+  });
+
+  it('rejects parent identities on the support routes', async () => {
+    const parent = await opsApp(identity({ uid: 'alice', roles: undefined }));
+    for (const url of [
+      '/v1/admin/families/alice',
+      '/v1/admin/families/alice/export',
+      '/v1/admin/families/alice/deletion-check',
+      '/v1/admin/families/alice/lessons/lesson-1',
+    ]) {
+      const denied = await parent.app.inject({ method: 'GET', url, headers: bearer });
+      expect(denied.statusCode).toBe(403);
+    }
   });
 });

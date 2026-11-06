@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { assertLesson } from '@lessonbooks/contracts';
 import { ParentApp } from './ParentApp';
+import { AdminApp } from './AdminApp';
 import { Player } from './player/Player';
 import english from '../../doc/fixtures/lessons/english.json';
 import arabic from '../../doc/fixtures/lessons/arabic.json';
@@ -11,5 +12,11 @@ if (sample) assertLesson(fixture);
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing app root');
 createRoot(root).render(
-  sample ? <Player lesson={fixture as Parameters<typeof Player>[0]['lesson']} /> : <ParentApp />,
+  location.pathname === '/admin' ? (
+    <AdminApp />
+  ) : sample ? (
+    <Player lesson={fixture as Parameters<typeof Player>[0]['lesson']} />
+  ) : (
+    <ParentApp />
+  ),
 );

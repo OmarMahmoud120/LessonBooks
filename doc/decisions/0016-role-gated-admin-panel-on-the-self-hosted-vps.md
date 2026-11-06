@@ -109,3 +109,16 @@ because this decision named both as open.
   and `FamilyService` — the same abstractions the family surface uses — so the
   cutover swaps the driver underneath it without changing the monitor. The cutover
   still gates the runtime switchover; it no longer gates the monitor code.
+- **Panel authentication** (phase C slice): the `/admin` route authenticates
+  operators through the existing public `lessonbooks-site` PKCE client instead of
+  the confidential client — a browser app cannot hold a client secret, and the
+  realm role plus server-side route gates carry the authorization regardless of
+  which client issued the token. The confidential `lessonbooks-admin-panel` client
+  and its service account remain for future server-mediated operator flows and
+  scripted verification. The role check in the panel decides only what to render;
+  every capability is enforced per route server-side.
+- **Rate-limit tuning**: the 5/hour defaults for PIN set and book upload stay the
+  documented posture, but `RATE_LIMIT_PIN_PER_HOUR` and `RATE_LIMIT_UPLOADS_PER_HOUR`
+  (bounded 1–1000, invalid values fail startup) allow the local Compose stack to
+  raise them for browser-test repeatability. The VPS keeps the defaults until a
+  launch decision changes them.

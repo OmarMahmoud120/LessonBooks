@@ -29,6 +29,7 @@ export type RuntimeConfig = {
   ocrMaxRequests: number;
   auth: AuthConfig;
   assets: AssetConfig;
+  limits: { pinPerHour: number; uploadsPerHour: number };
   endpoints: Record<string, string>;
   projectId?: string;
   queuePath?: string;
@@ -154,6 +155,19 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
   }
   const host = env.HOST ?? '127.0.0.1';
   if (!['127.0.0.1', '0.0.0.0'].includes(host)) throw new Error('invalid_bind_host');
+  // Rate limits keep the documented 5/hour defaults; the local Compose stack
+  // raises them for browser-test repeatability. Overrides must stay bounded.
+  const rateLimit = (value: string | undefined, fallback: number): number => {
+    if (value === undefined) return fallback;
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1000)
+      throw new Error('invalid_rate_limit');
+    return parsed;
+  };
+  const limits = {
+    pinPerHour: rateLimit(env.RATE_LIMIT_PIN_PER_HOUR, 5),
+    uploadsPerHour: rateLimit(env.RATE_LIMIT_UPLOADS_PER_HOUR, 5),
+  };
   const port = Number(env.PORT ?? '3001');
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('invalid_port');
   if (env.REQUIRE_SCAN && !['true', 'false'].includes(env.REQUIRE_SCAN))
@@ -211,6 +225,7 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
       ocrMaxRequests,
       auth,
       assets,
+      limits,
       endpoints: {},
       projectId,
       queuePath: `projects/${projectId}/locations/${location}/queues/${queue}`,
@@ -243,6 +258,7 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
     ocrMaxRequests,
     auth,
     assets,
+    limits,
     endpoints,
   };
 }

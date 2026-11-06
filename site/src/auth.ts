@@ -53,7 +53,10 @@ async function hydrate(): Promise<ParentSession | null> {
 }
 
 export async function signIn() {
-  await userManager.signinRedirect();
+  // The admin panel lives on the /admin path of the same app; return there when
+  // sign-in started from it. The site client's redirect whitelist covers both.
+  const returnPath = window.location.pathname.startsWith('/admin') ? '/admin' : '/';
+  await userManager.signinRedirect({ redirect_uri: `${origin}${returnPath}` });
 }
 
 export async function signOut() {

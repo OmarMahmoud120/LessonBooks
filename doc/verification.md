@@ -357,6 +357,40 @@ received 403. Direct grants were toggled off afterwards.
 Boundary: the panel UI is still unbuilt — the ops surface is API-only. Phase C
 (moderation and support) remains future design.
 
+## Admin panel phase C slice and UI — 2026-11-06
+
+Closed the remaining actionable gaps from the phase B report. The support and
+moderation reads landed: `GET /v1/admin/families/:id` (parent overview without the
+credential hash, kid identifiers and nicknames, consent records), an export of every
+family collection for subject access, a deletion check that counts each collection
+and asks the identity provider whether the account survived (fail-open to `null`
+only when the provider lookup errors), and a read-only lesson view that reuses the
+family `lesson` path against the real asset store. All four are role-gated, require
+recent authentication, are audited, and never create family state — the unit tests
+assert the no-creation invariant directly. The ops panel UI is a `/admin` route in
+`site/`: operator sign-in through the existing PKCE client, sections for jobs
+(with retry for failed jobs), usage totals, the audit log, and the family support
+tools; the realm role decides what renders while the API keeps enforcing per route
+(ADR 0016 records the public-client amendment). Rate limits for PIN set and book
+upload became env-tunable with the 5/hour defaults unchanged; the local Compose
+stack raises them so parallel browser journeys stop exhausting the shared-IP quota.
+
+Tests: 8 new unit tests for the support routes (no-creation, tombstone and absent
+handling, real `deleteAccount` erasure verified through the check, lesson view with
+a contract-valid fixture, gating) plus rate-limit parsing cases. `npm test` passes
+289 unit tests; lint, typecheck and the build pass.
+
+Browser evidence: a new read-only journey signs the synthetic operator into `/admin`
+on both viewports and asserts the four sections render with live data; it retries
+the Keycloak submit because same-second parallel logins for one user trip the realm's
+quick-login throttle. Live API checks returned a real family overview, deletion
+state with `identity_exists=true`, a full export, and a lesson view whose JSON came
+from Garage with the expected metadata. Direct grants were toggled off afterwards.
+
+Remaining gaps: audit export/pagination, storage-prefix verification in the deletion
+check (the `Assets` interface has no listing yet), Phase C moderation actions such
+as deactivating a revision, and every VPS provisioning item.
+
 ## Admin surface review — 2026-11-06
 
 The security and privacy reviewer roles were applied to the admin-surface diff by

@@ -190,3 +190,17 @@ it.each([
 ])('rejects unsafe or invalid runtime settings %j', (env) => {
   expect(() => runtimeConfig(env)).toThrow();
 });
+it('keeps the documented 5/hour rate limits by default and bounds overrides', () => {
+  expect(runtimeConfig(keycloakEnv).limits).toEqual({ pinPerHour: 5, uploadsPerHour: 5 });
+  expect(
+    runtimeConfig({
+      ...keycloakEnv,
+      RATE_LIMIT_PIN_PER_HOUR: '50',
+      RATE_LIMIT_UPLOADS_PER_HOUR: '50',
+    }).limits,
+  ).toEqual({ pinPerHour: 50, uploadsPerHour: 50 });
+  for (const bad of ['0', '-1', '1001', 'abc', '2.5'])
+    expect(() => runtimeConfig({ ...keycloakEnv, RATE_LIMIT_PIN_PER_HOUR: bad })).toThrow(
+      'invalid_rate_limit',
+    );
+});
