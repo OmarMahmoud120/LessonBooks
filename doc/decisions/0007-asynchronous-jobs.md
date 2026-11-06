@@ -1,6 +1,8 @@
 # 0007: asynchronous jobs
 
-Status: Accepted
+Status: Accepted (dispatch superseded by
+[0013](0013-self-hosted-vps-deployment-replacing-firebase-and-cloud-tasks.md):
+polling worker, no Cloud Tasks)
 Date: 2026-11-03
 
 ## Context

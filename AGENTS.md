@@ -32,7 +32,7 @@ Current scope: Phase 0 foundations and Phase 1 parent preview. See doc/milestone
 ## Commands (from repository root)
 
 - Install: npm ci (requires permission; npm install for the initial lockfile).
-- Develop: npm run dev; npm run dev:mobile; npm run emulators.
+- Develop: npm run dev; npm run dev:mobile. Local stack: npm run docker:up (see doc/docker.md).
 - Android device work: read .agents/skills/android-cli/SKILL.md first; see mobile/AGENTS.md.
 - Format/lint: npm run format; npm run lint.
 - Types/tests: npm run typecheck; npm test; npm run check:fast; npm run check.
@@ -87,7 +87,8 @@ pending, report the retained branch, worktree, unique work and remaining cleanup
 
 ## Current verification boundary
 
-The local entrypoint uses Firebase emulators and mocked AI. Native iOS JavaScript export
+The local entrypoint uses the Postgres/Keycloak/Garage Compose stack and mocked AI.
+Native iOS JavaScript export
 uses `npm run export:ios --workspace @lessonbooks/mobile` (offline Expo, telemetry disabled).
 Client validators are generated standalone code; dynamic schema compilation belongs only in
 @lessonbooks/contracts/server. Preserve the player CSP without unsafe-eval. See

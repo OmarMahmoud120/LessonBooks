@@ -17,7 +17,7 @@ Hooks: shared pre-tool policy blocks secret paths, traversal, symlink escapes, m
 
 Package installs/downloads, network actions, MCP additions, paid calls, pushes and deployments require authorization. settings.local.json is ignored. Placeholder-only .env.example files are allowed; secret files are not. Generated contracts may only be written by the generator. User/workspace policy may be stricter than these files and takes precedence.
 
-No MCP server is installed or configured. Candidates: GitHub for issues/PRs, Firebase for cloud/emulator inspection, Playwright for interactive debugging, official documentation lookup. Each needs separate approval and least-privilege credentials; CI/browser tests do not require MCP.
+No MCP server is installed or configured. Candidates: GitHub for issues/PRs, Playwright for interactive debugging, official documentation lookup. Each needs separate approval and least-privilege credentials; CI/browser tests do not require MCP.
 
 Official references checked 2026-11-03: [Codex instructions](https://learn.chatgpt.com/docs/agent-configuration/agents-md), [skills](https://learn.chatgpt.com/docs/build-skills), [hooks](https://learn.chatgpt.com/docs/hooks), [configuration](https://learn.chatgpt.com/docs/config-file/config-reference), [Claude hooks](https://code.claude.com/docs/en/hooks), [permissions](https://code.claude.com/docs/en/permissions), [subagents](https://code.claude.com/docs/en/sub-agents), [OpenCode v2 agents](https://opencode.ai/v2/docs/agents/), [permissions](https://opencode.ai/v2/docs/permissions/), [plugins](https://opencode.ai/v2/docs/build/plugins/server).
 

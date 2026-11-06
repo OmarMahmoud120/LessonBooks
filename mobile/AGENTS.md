@@ -14,7 +14,7 @@ Use `android build` and `android run` with the inspected build target/APK and ex
 `--device=<serial>`. Inspect with `android layout --device=<serial>`; interact through
 `adb -s <serial> shell input ...`. Save and visually inspect `android screen capture`
 images before taking further actions. Use slow scrolls and focused-field text input.
-Android emulators reach host Firebase/API services at 10.0.2.2. Use owned PDF fixtures
+Android emulators reach host API/Keycloak services at 10.0.2.2. Use owned PDF fixtures
 and a synthetic parent account. Report UI journey steps, failures, screenshots and
 native runtime errors in doc/; do not infer a pass from successful APK installation.
 

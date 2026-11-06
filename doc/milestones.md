@@ -1,6 +1,6 @@
 # Milestones
 
-Updated: 2026-11-06. Phase 0 and Phase 1 are in progress; Phase 2 is complete for the
+Updated: 2026-11-07. Phase 0 and Phase 1 are in progress; Phase 2 is complete for the
 local synthetic scope. The local synthetic-content vertical slice is implemented; the
 remaining criteria below prevent a full phase-complete claim.
 
@@ -101,10 +101,11 @@ The user accepted a full no-Google VPS migration in
 PostgreSQL, Keycloak, S3-compatible storage, polling dispatch, Docker Compose and
 Caddy. MinIO was replaced by Garage because MinIO withdrew its free distribution
 ([ADR 0014](decisions/0014-garage-replaces-minio-for-private-assets.md)). The
-migration is in progress; Firestore, Firebase Auth, Cloud Storage and Cloud Tasks
-remain the active document/auth/dispatch runtime until later phases land.
+migration code is complete (2026-11-07): PostgreSQL, Keycloak and Garage are the
+only document/auth/asset runtime and dispatch is the local polling worker. VPS
+provisioning and mobile-device login remain open.
 
-Phase 1 is implemented but not wired in: `PostgresRepository` covers path reads,
+Phase 1 was implemented first and later wired in: `PostgresRepository` covers path reads,
 direct-child listing, serializable transactions and prefix deletion, with 11 tests
 including a `FamilyService` create/delete scenario. Phase 2's `S3Assets` adapter is
 implemented behind the existing `Assets` interface, wired with `ASSET_STORE=s3`, and
@@ -135,11 +136,43 @@ and the real-Postgres behaviors pg-mem could not prove (rollback, serializable
 conflict retries with backoff, byte-level edge cases) are covered by a gated
 integration suite. `npm run docker:test` passed the full journey on Postgres and the
 browser suite passed on the cut-over stack; see
-[verification.md](verification.md). The GCP cloud runtime keeps Firestore and Cloud
-Tasks unchanged and rejects Postgres. Real-PostgreSQL transaction verification is
+[verification.md](verification.md). Real-PostgreSQL transaction verification is
 done; VPS provisioning and mobile-device login remain open. No VPS was provisioned,
 no data was migrated, and no live model or family-data use is authorized. See
-[vps-migration.md](vps-migration.md).
+[vps-migration.md](vps-migration.md). The Firebase/GCP runtime was removed entirely
+the next day; see the 2026-11-07 removal section above.
+
+## Firebase/GCP runtime removal — 2026-11-07
+
+By explicit owner decision, the entire Google runtime was removed after the Compose
+stack passed the full verification matrix on the new architecture (ADR 0013 phase 6,
+run ahead of VPS provisioning). Rollback point: the `pre-firebase-removal` tag on
+commit 65e6746.
+
+- [x] Baseline on the new stack before removal: `docker:up` healthy,
+      `docker:test` full journey passed, 12/12 browser tests including the real
+      offline-sync and admin-panel journeys, full `npm run check` (the rules stage
+      ran standalone because the Compose emulators service held the host ports).
+- [x] Removed from code: `firebase-admin`, `@google-cloud/tasks`, `firebase-tools`,
+      `@firebase/rules-unit-testing`; `FirestoreRepository`/`StorageAssets`;
+      the cloud runtime mode (`CLOUD_RUNTIME_APPROVED`, Cloud Tasks publisher,
+      outbox sweeper, OIDC worker endpoint); all `FIREBASE_*`/`GCLOUD_*`/`CLOUD_TASKS_*`
+      settings; the Firebase emulators service, Dockerfile stage, rules files and
+      `firebase.json`.
+- [x] Defaults flipped: `AUTH_PROVIDER=keycloak`, `REPOSITORY=postgres`,
+      `ASSET_STORE=s3` are the only accepted values; loopback defaults mirror the
+      synthetic Compose credentials so `npm run dev` needs no env file. Every
+      unknown or unsafe value still fails closed.
+- [x] The rules suites were replaced as authorization evidence by the gated
+      real-Postgres integration suite, the S3 adapter tests, and the `docker:test`
+      assertions that anonymous Garage access is 403 and the API is 401.
+- [x] The deploy gate now lists VPS settings and still fails by design.
+- [x] Verification after removal: 256 unit tests, full `npm run check` with
+      12/12 browser tests, and `docker:test` passed on the stack with no
+      emulators service. See verification.md.
+
+Open gates unchanged: no live model, no family data, VPS provisioning, native
+mobile-device login, native iOS, TalkBack/RTL device checks.
 
 ## Admin panel — 2026-11-06
 

@@ -1,6 +1,9 @@
 # Data model and access matrix
 
-Canonical family root: parents/{parentId}. The identity-provider subject (`sub`) is the parentId: the Firebase Auth UID by default, or the Keycloak user id when `AUTH_PROVIDER=keycloak`. Subcollections below that root: kids, books, generation_jobs, lessons, consent_records, assignments and progress_events. lesson_results has no writer yet.
+Canonical family root: parents/{parentId}. The identity-provider subject (`sub`) is
+the parentId: the Keycloak user id. Subcollections below that root: kids, books,
+generation_jobs, lessons, consent_records, assignments and progress_events.
+lesson_results has no writer yet.
 
 | Entity                 | Principal fields                                                                                                                 |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -15,15 +18,18 @@ Canonical family root: parents/{parentId}. The identity-provider subject (`sub`)
 
 Use age bands, not birth years. Nicknames and educational progress are personal data even without direct identifiers. Do not collect photos, school names, location coordinates, voice recordings or contact information for children.
 
-| Actor           | Own-family API                                             | Other family                           | Direct private Firestore/Storage | Public curriculum |
-| --------------- | ---------------------------------------------------------- | -------------------------------------- | -------------------------------- | ----------------- |
-| unauthenticated | deny                                                       | deny                                   | deny                             | read              |
-| parent          | validated operations                                       | deny                                   | deny                             | read              |
-| child profile   | no separate identity; Phase 2 restricted host capabilities | deny                                   | deny                             | through host      |
-| API service     | scoped by verified UID                                     | no user-controlled cross-family access | IAM server access                | read              |
-| worker service  | only referenced active job/family                          | reject mismatched refs                 | least-privilege IAM              | read              |
+| Actor           | Own-family API                                             | Other family                           | Direct private Postgres/Garage | Public curriculum |
+| --------------- | ---------------------------------------------------------- | -------------------------------------- | ------------------------------ | ----------------- |
+| unauthenticated | deny                                                       | deny                                   | deny                           | read              |
+| parent          | validated operations                                       | deny                                   | deny                           | read              |
+| child profile   | no separate identity; Phase 2 restricted host capabilities | deny                                   | deny                           | through host      |
+| API service     | scoped by verified UID                                     | no user-controlled cross-family access | private-network service access | read              |
+| worker service  | only referenced active job/family                          | reject mismatched refs                 | private-network service access | read              |
 
-Admin SDK bypasses rules. API and worker ownership tests are required; rules tests alone do not prove isolation. All referenced kid/book/job/lesson IDs must resolve under the authenticated parent namespace.
+No client has direct database or object-store access; the published ports bind to
+loopback only and exist for verification and gated integration tests. API and worker
+ownership tests are required to prove isolation. All referenced kid/book/job/lesson
+IDs must resolve under the authenticated parent namespace.
 
 Lesson status does not encode assignment; assignments are separate records. Approval pins an immutable revision. Deletion first marks family/kid deleting, rejects new work, cancels jobs, removes records and storage objects, then removes Auth on account deletion. Retry deletion safely; never allow a stale worker to resurrect data. Backup erasure deadlines and legal record retention need approval before launch.
 

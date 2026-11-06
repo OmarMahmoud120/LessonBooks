@@ -2,7 +2,13 @@
 
 Proposed v1 surface; implementation and tests must be reconciled here as endpoints land.
 
-Parent requests use Authorization: Bearer <access token>. The default provider is Firebase Auth and verifies tokens through the Admin SDK; `AUTH_PROVIDER=keycloak` verifies RS256 access tokens against the realm JWKS and requires the configured issuer and audience. In both cases the API derives parentId from the verified `sub` and never accepts a request-selected owner. PIN set and account deletion require a recent interactive login (five minutes), resolved from the Keycloak SSO session start so a client cannot forge it. Local emulator tokens are accepted only in explicit emulator mode. Responses containing family data use Cache-Control: no-store.
+Parent requests use Authorization: Bearer <access token>. Identity is Keycloak
+(`AUTH_PROVIDER=keycloak`): the API verifies RS256 access tokens against the realm
+JWKS and requires the configured issuer and audience. The API derives parentId from
+the verified `sub` and never accepts a request-selected owner. PIN set and account
+deletion require a recent interactive login (five minutes), resolved from the
+Keycloak SSO session start so a client cannot forge it. Responses containing family
+data use Cache-Control: no-store.
 
 | Method/path                  | Purpose                                               |
 | ---------------------------- | ----------------------------------------------------- |
@@ -35,4 +41,9 @@ material.
 
 Use non-guessable IDs plus ownership checks. Reject unknown request fields, unsupported locale/curriculum combinations and invalid references. Upload type/magic, byte/page limits and rate limiting apply before costly parsing/model calls. A supplied idempotency key is scoped to parent and operation. Errors return safe codes, never raw provider responses or stack traces.
 
-The private worker endpoint requires a Cloud Tasks OIDC service identity and cannot be reached using a parent token. Site/mobile progress events are validated by the shared event schema and persisted per kid; the API derives kid identity from the lesson record, rejects revision mismatches and deduplicates by event_id, so this is not an unauthenticated ingestion shortcut. Event batches are capped at 50 and rate-limited.
+Generation dispatch is the local polling worker over persisted jobs; there is no
+public worker endpoint, and no parent token can trigger a stage directly. Site/mobile
+progress events are validated by the shared event schema and persisted per kid; the
+API derives kid identity from the lesson record, rejects revision mismatches and
+deduplicates by event_id, so this is not an unauthenticated ingestion shortcut.
+Event batches are capped at 50 and rate-limited.

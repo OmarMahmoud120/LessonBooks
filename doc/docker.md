@@ -3,10 +3,10 @@
 ## Local development
 
 Requires Docker Engine and Compose with health-based dependencies and watch support.
-Use synthetic/owned PDFs only. Initial builds download locked npm dependencies,
-base images, emulator runtimes and Linux OCR/scanner packages. Startup downloads
-ClamAV definitions through a separate updater. No host Node/Java/OCR installation
-or cloud account is needed to run the stack.
+Use synthetic/owned PDFs only. Initial builds download locked npm dependencies, base
+images and Linux OCR/scanner packages. Startup downloads ClamAV definitions through a
+separate updater. No host Node/Java/OCR installation or cloud account is needed to
+run the stack.
 
 ```sh
 npm run docker:up
@@ -28,11 +28,11 @@ uses an allowlist excluding private books, credentials, environments and native 
 output. Images have no host source mounts. Use `docker compose --env-file /dev/null watch`
 for source edit/rebuild on the running stack.
 
-API: 127.0.0.1:3001. Keycloak: 127.0.0.1:8081 (realm `lessonbooks`). Firestore/Storage
-emulators: localhost 8080/9199; the Firebase Auth emulator still starts on 9099 for
-the rollback path. Garage S3: 127.0.0.1:3900. Stop conflicting host services first.
-The worker exposes health only on the private network. All AI is mocked, identity is
-Keycloak and private assets are stored in Garage.
+API: 127.0.0.1:3001. Keycloak: 127.0.0.1:8081 (realm `lessonbooks`). Garage S3:
+127.0.0.1:3900. Postgres: 127.0.0.1:5432 (documents DB, loopback only for the gated
+integration tests). Stop conflicting host services first. The worker exposes health
+only on the private network. All AI is mocked, identity is Keycloak, documents live
+in Postgres and private assets are stored in Garage.
 
 The signatures job must finish successfully before worker startup. If the vendor
 CDN rejects updates, startup fails closed. Inspect signatures logs and retry after
@@ -42,9 +42,9 @@ resolving the restriction; do not disable scanning to bypass it. Refresh explici
 docker compose --env-file /dev/null run --rm signatures
 ```
 
-Emulator exports persist in lessonbooks_emulator-data on graceful shutdown. Scanner
-definitions persist in lessonbooks_scanner-data, and private assets persist in
-lessonbooks_garage-data. Normal down preserves all three volumes. Removing volumes
+Scanner definitions persist in lessonbooks_scanner-data, private assets persist in
+lessonbooks_garage-data, and documents persist in lessonbooks_documents-db-data and
+lessonbooks_keycloak-db-data. Normal down preserves all volumes. Removing volumes
 erases local state; do so only intentionally after review.
 
 ## Private asset storage (Garage)
@@ -67,9 +67,8 @@ distribution; see [ADR 0014](decisions/0014-garage-replaces-minio-for-private-as
 - `backend/infra/garage.toml` contains a synthetic local RPC secret. A VPS deployment
   must generate its own secret, access keys and encrypted backups.
 
-The Firebase Storage emulator still runs because Firestore remains the document
-store; asset writes go to Garage under `ASSET_STORE=s3`. Setting
-`ASSET_STORE=firebase` restores the legacy Cloud Storage adapter for comparison.
+Documents live in Postgres (`REPOSITORY=postgres`); asset writes go to Garage under
+`ASSET_STORE=s3`. Both settings fail closed on any other value.
 
 ## Identity (Keycloak)
 
@@ -95,12 +94,6 @@ plus a loopback port for browsers.
   cannot use a read-only root. A VPS image should bake `kc.sh build` and run
   `--optimized`.
 
-## Switching identity back to Firebase
-
-Set `AUTH_PROVIDER=firebase` (the default) and use Firebase emulator tokens again.
-Firestore and the Firebase Auth emulator are untouched by the Keycloak path, so this
-is the rollback path until Phase 6 removes it.
-
 ## Runtime image packaging
 
 ```sh
@@ -109,41 +102,31 @@ docker build -f backend/Dockerfile --target worker -t lessonbooks-worker:local .
 ```
 
 API contains built JavaScript, versioned prompts, the mock lesson fixture and
-production npm dependencies, without a TS loader, source tree, emulator CLI or OCR
-tools. Worker adds pdftoppm/pdfimages, Tesseract with the pinned tessdata_best
+production npm dependencies, without a TS loader, source tree or OCR tools. Worker adds pdftoppm/pdfimages, Tesseract with the pinned tessdata_best
 Arabic and English LSTM models (sha256-verified download at build, see ADR 0010),
 and clamscan/freshclam. Both run non-root. Compose uses read-only roots,
 bounded temporary storage and read-only worker scanner definitions. The worker has only the internal network and cannot reach the internet. The updater
-has a separate outbound network and no family-data access. API/emulators also use a
+has a separate outbound network and no family-data access. The API also uses a
 local bridge for host port publishing; that bridge permits outbound traffic.
 
 These are production-shaped image artifacts, not an enabled production service.
-Default NODE_ENV=production deliberately triggers the existing startup gate. Cloud
-Tasks/OIDC/outbox, provider policy, regions, consent, retention, vulnerability review
-and production Firebase configuration remain separate implementation/approval gates.
-Do not deploy by setting NODE_ENV=development: that mode accepts emulator tokens only.
+Default NODE_ENV=production deliberately triggers the existing startup gate.
+Provider policy, regions, consent, retention and vulnerability review remain
+separate implementation/approval gates. Generation dispatch is the local polling
+worker over persisted jobs; `npm run deploy` still fails by design until every
+decision in its checklist is recorded and the VPS deployment path is built.
 
 Runtime settings: SERVICE_ROLE api/worker/all (host default all), HOST
 127.0.0.1/0.0.0.0, PORT 1024–65535, REQUIRE_SCAN true/false (Compose worker true).
-ASSET_STORE firebase/s3 (Compose uses s3); s3 requires S3_ENDPOINT, S3_BUCKET,
-S3_REGION, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY, and currently accepts only
-`http://127.0.0.1:3900`, `http://localhost:3900` or `http://garage:3900`. Unknown or
-missing values fail closed. Emulator endpoints accept only loopback or the exact
-Compose emulators service with its expected port. Other destinations and live mode
-fail validation.
-
-Cloud runtime mode (CLOUD_RUNTIME_APPROVED=true) requires NODE_ENV=production, an
-explicit project, region (residency data), matching Cloud Tasks location and queue,
-an https worker URL, a least-privilege worker service account, separate SERVICE_ROLE
-values for api and worker, and forbids emulator endpoint variables. In cloud mode the
-API enqueues generation tasks with deterministic idempotent names, runs an outbox
-sweeper for lost dispatch and stalled leases, and the worker exposes
-POST /v1/internal/jobs/:uid/:jobId that accepts only Cloud Tasks OIDC tokens for the
-configured audience and service account; the poller is not used. Live AI stays
-refused in both modes. Cloud Run service templates live in backend/infra/cloudrun/
-and `npm run deploy` still fails by design until every decision in its checklist is
-recorded. Dispatch and verification are tested with injected fakes only; real Cloud
-Tasks delivery remains externally unverified.
+Repository is always Postgres (`REPOSITORY=postgres`, the only accepted value) and
+requires POSTGRES_URL with a loopback or Compose `postgres` host. Assets are always
+Garage (`ASSET_STORE=s3`) and require S3_ENDPOINT, S3_BUCKET, S3_REGION,
+S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY; the endpoint accepts only
+`http://127.0.0.1:3900`, `http://localhost:3900` or `http://garage:3900`. Identity
+is always Keycloak (`AUTH_PROVIDER=keycloak`). Loopback defaults in
+`backend/src/runtime-config.ts` mirror the synthetic Compose credentials, so
+host-native `npm run dev` works against the Docker stack with no env file.
+Unknown or missing values fail closed, as does live mode.
 
 ## Verification
 

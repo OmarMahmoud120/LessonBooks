@@ -7,13 +7,16 @@ Implementation is in progress. Start with [milestones](doc/milestones.md),
 
 ## Development
 
-Node 24 LTS or newer, npm, Java 21+ for Firebase emulators, and platform tooling for
-React Native are required. Ask before installing dependencies or downloading emulator
-and browser binaries. No cloud project or API secret is needed for mocked development.
+Node 24 LTS or newer, npm, Docker for the local Postgres/Keycloak/Garage stack,
+and platform tooling for React Native are required. Ask before installing
+dependencies or downloading emulator and browser binaries. No cloud project or
+API secret is needed for mocked development.
 
 1. With approval, run `npm install` initially, or `npm ci` after the lockfile exists.
 2. Run `npm run check:fast` for types, unit tests and development guardrails.
-3. Run `npm run check` for the same checks as CI, including browser and emulator tests.
+3. Run `npm run docker:up` for the local stack, `npm run docker:test` for the
+   end-to-end journey, and `npm run check` for the same checks as CI, including
+   browser tests. See [doc/docker.md](doc/docker.md).
 4. See each folder README for local startup instructions as its implementation lands.
 
 No MCP servers, paid AI calls, production deployment or real family data are enabled.

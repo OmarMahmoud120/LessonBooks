@@ -1,9 +1,11 @@
 # VPS migration plan
 
-Status: in progress. Decision recorded in
+Status: code migration complete; VPS provisioning and device verification remain.
+Decision recorded in
 [ADR 0013](decisions/0013-self-hosted-vps-deployment-replacing-firebase-and-cloud-tasks.md).
 Target: single Linux VPS, Docker Compose, Caddy, PostgreSQL, Keycloak, Garage,
-polling worker/outbox sweeper. No Google Cloud or Firebase runtime dependency.
+polling worker. No Google Cloud or Firebase runtime dependency remains in the
+repository (2026-11-07); the rollback point is the `pre-firebase-removal` tag.
 
 This plan does not authorize live AI, real family data, public exposure or paid
 provider calls. Those gates remain in [milestones.md](milestones.md) and
@@ -18,8 +20,10 @@ provider calls. Those gates remain in [milestones.md](milestones.md) and
   credentials.
 - Use synthetic/owned books for every migration test until legal and vendor
   decisions are complete.
-- Do not delete the Firestore/Firebase adapters until the VPS path passes the full
-  verification matrix; they are the rollback path.
+- The Firestore/Firebase/Cloud Tasks adapters were removed on 2026-11-07 by explicit
+  owner decision after the Compose stack passed the full verification matrix on the
+  new runtime, ahead of VPS provisioning. The pre-removal state stays reachable via
+  the `pre-firebase-removal` tag; restore from it only deliberately.
 
 ## Phase 1 — PostgreSQL document store (implemented, verification pending)
 
@@ -36,14 +40,15 @@ Tasks:
 - [x] Tests: get/missing, direct-child listing, wildcard characters in paths,
       upsert, callback-abort discard, prefix isolation, FamilyService create/delete,
       commit/rollback/retry control with an injected pool.
-- [ ] Verify rollback, serialization retry and byte-level behavior against a real
-      PostgreSQL instance on the VPS. `pg-mem` does not implement transactions, so
-      the current tests use an injected pool for transaction control and pg-mem for
-      SQL behavior.
+- [x] Verify rollback, serialization retry and byte-level behavior against a real
+      PostgreSQL instance. `pg-mem` does not implement transactions, so the unit
+      tests use an injected pool for transaction control and pg-mem for SQL
+      behavior; `persistence-postgres.integration.test.ts` covers the real server
+      behind an env gate.
 
-Evidence: 11 new tests pass; `FamilyService` creates and deletes a child through the
-adapter. The repository is not yet wired into `server.ts`; Firestore remains the
-active runtime until the remaining phases land.
+Evidence: 11 unit tests pass; `FamilyService` creates and deletes a child through
+the adapter. The repository is wired into `server.ts` and is the only document
+store (2026-11-06 cutover; 2026-11-07 removal).
 
 Acceptance: `FamilyService`, `Pipeline` and `OutboxSweeper` tests pass unchanged
 against the Postgres repository, and the real-Postgres transaction check above is
@@ -81,8 +86,7 @@ Tasks:
 
 Evidence: 11 adapter tests and real Garage put/get/prefix-delete checks pass; the
 Compose journey stores PDFs in Garage, the worker reads them for OCR, and deletion
-leaves no objects. Firestore remains the document store and Firebase Auth remains
-the identity provider until later phases.
+leaves no objects. Garage is the only asset store (2026-11-07 removal).
 
 Acceptance: the emulator vertical journey passes with files stored in Garage and the
 same family-scoped deletion behavior; VPS durability and restore verification remain
@@ -136,22 +140,25 @@ IP bounds local browser-test repeatability (see [verification.md](verification.m
 Acceptance: website and mobile complete login and authorized API calls against
 Keycloak; the API rejects every invalid token class; identity deletion is verified.
 
-## Phase 4 — Dispatch and runtime configuration
+## Phase 4 — Dispatch and runtime configuration (implemented 2026-11-07)
 
 Tasks:
 
-- Make polling + `OutboxSweeper` the VPS worker path; remove Cloud Tasks and OIDC
-  endpoint use from VPS configuration.
-- Replace GCP runtime settings with Postgres, S3-compatible storage (Garage), Keycloak and public-base-URL
-  settings; fail closed on missing or unsafe values.
-- Keep attempt/lease/fence/idempotency behavior unchanged.
-- Remove `CLOUD_RUNTIME_APPROVED` branches from the VPS runtime or keep them
-  explicitly unsupported.
-- Tests: lost dispatch recovery, stalled lease recovery, duplicate polling, deletion
-  wins over stale worker.
+- [x] Make polling the only worker path; remove Cloud Tasks and the OIDC
+      `/v1/internal/jobs` endpoint entirely, including the outbox sweeper and the
+      `@google-cloud/tasks` dependency.
+- [x] Replace GCP runtime settings with Postgres, Garage and Keycloak settings;
+      loopback defaults mirror the synthetic Compose values and every unknown or
+      unsafe value fails closed.
+- [x] Keep attempt/lease/fence/idempotency behavior unchanged.
+- [x] Remove `CLOUD_RUNTIME_APPROVED` and the cloud runtime mode entirely.
+- [x] Tests: stalled lease recovery, duplicate polling and deletion wins over stale
+      worker are covered by the unit suite and the `docker:test` journey; lost
+      Cloud Tasks dispatch recovery no longer exists because Cloud Tasks is gone.
 
 Acceptance: uploads complete through the polling worker with no Google environment
-variables and no outbound Cloud Tasks calls.
+variables and no outbound Cloud Tasks calls — verified by `docker:test` on the
+Postgres/Garage/Keycloak stack.
 
 ## Phase 5 — Deployment and operations
 
@@ -184,21 +191,25 @@ Tasks:
 Acceptance: documented restore drill, deletion drill, TLS verification and a
 synthetic end-to-end smoke on the VPS.
 
-## Phase 6 — Test-suite replacement and cutover
+## Phase 6 — Test-suite replacement and cutover (partially done 2026-11-07)
 
 Tasks:
 
-- Replace Firebase emulator and rules tests with Postgres/Keycloak/Garage integration
-  tests. Keep API-level ownership tests as the primary authorization evidence.
-- Update `npm run check`, `phase-status` and the deploy gate for VPS settings.
-- Update milestones, architecture, data model, API and privacy docs.
-- Run the migration in parallel: export a synthetic dataset, run both stacks, compare
-  behavior, then cut over.
-- Keep a rollback branch and Firestore adapters until one successful VPS verification
-  cycle is recorded.
+- [x] Replace Firebase emulator and rules tests with Postgres/Keycloak/Garage
+      integration tests (real-Postgres gated suite, S3 adapter tests, `docker:test`
+      private-object/403 checks). API-level ownership tests remain the primary
+      authorization evidence; the `docker:test` journey asserts Garage anonymous
+      access is 403 and the API is 401 anonymously.
+- [x] Update `npm run check` (no rules stage) and the deploy gate for VPS settings;
+      `phase-status` reads milestones.
+- [x] Update milestones, architecture, data model, API, docker and privacy docs.
+- [ ] Run the migration in parallel on real family data: not applicable yet; no
+      family data exists and none is authorized.
+- [x] Rollback: the Firestore adapters were removed ahead of VPS provisioning by
+      explicit owner decision; the `pre-firebase-removal` tag preserves the state.
 
-Acceptance: `npm run check` passes with no Google runtime dependency; recorded VPS
-smoke and restore/deletion evidence; rollback path documented.
+Acceptance: `npm run check` passes with no Google runtime dependency (2026-11-07);
+recorded VPS smoke and restore/deletion evidence remain open.
 
 ## Open decisions
 

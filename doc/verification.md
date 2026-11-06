@@ -449,3 +449,40 @@ the earlier "supported engine unverified" caveats from the 23.7.0 era are supers
 by today's green runs. Remaining phase 4/6 items: rules-test replacement decisions
 and the full `npm run check` on the Postgres runtime; phase 5 needs real VPS
 provisioning decisions and secrets.
+
+## Firebase/GCP runtime removal — 2026-11-07
+
+The owner chose to remove the whole Google runtime (Firebase Auth/Firestore/Storage,
+emulators, Cloud Tasks and the cloud runtime mode) after the new stack passed the
+full verification matrix, ahead of VPS provisioning (ADR 0013 phase 6). Rollback
+point: annotated tag `pre-firebase-removal` on commit 65e6746.
+
+Baseline on the new stack, before any edit: `npm run docker:up` reached healthy on
+garage, keycloak-db, postgres, keycloak, emulators, api and worker; `npm run
+docker:test` passed the full synthetic journey on Postgres/Keycloak/Garage; `npm run
+check` passed lint, agents/contract checks, typecheck, unit tests, fixtures, the
+mocked evaluation, builds and 12/12 Playwright tests — including the real
+offline-sync journey on both viewports and the admin-panel journey against the live
+stack. The final `test:rules` stage could not bind ports 9099/8080/9199 because the
+Compose emulators service held them; run standalone with that service stopped it
+passed 3/3, matching the port-conflict workaround recorded earlier in this file.
+That conflict class is gone with the rules stage itself.
+
+After removal: `firebase-admin`, `@google-cloud/tasks`, `firebase-tools`,
+`@firebase/rules-unit-testing` are gone from package.json and the lockfile;
+`grep -rn "firebase|firestore|google-cloud|CloudTasks"` over backend/site/mobile
+source finds only the runtime-config rejection tests asserting `firebase` values
+fail closed. `runtime-config.ts` defaults to `AUTH_PROVIDER=keycloak`,
+`REPOSITORY=postgres`, `ASSET_STORE=s3` with loopback endpoints mirroring the
+synthetic Compose credentials; all validators and the production refusal are
+unchanged. `npm run agents:sync` regenerated the adapters after the sync-agents
+permission list dropped `firebase deploy` and `npm run emulators`.
+
+Post-removal evidence: typecheck clean; 256 unit tests pass (rules/emulator/cloud
+suites deleted; transport and runtime-config suites updated; replacement coverage is
+the gated real-Postgres suite, the S3 adapter tests and the docker journey's 403/401
+anonymous-access assertions); full `npm run check` passed with 12/12 browser tests
+on the live stack; `docker compose down/up` rebuilt without the emulators service
+(6 healthy services, orphan container and its volume removed) and `npm run
+docker:test` passed the full journey again. `npm run deploy` still exits 1 with the
+new VPS settings checklist. No live model, family data, push or deploy happened.
