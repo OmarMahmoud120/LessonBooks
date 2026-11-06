@@ -125,7 +125,11 @@ Tasks:
 Evidence: the Compose journey signs in with a synthetic Keycloak user, stores assets
 in Garage, completes the lesson pipeline and deletes both the family documents and
 the Keycloak identity. The website completed a real PKCE login in a browser with no
-console errors.
+console errors. The committed offline-sync browser journey registers a family
+through the Keycloak registration page, completes a lesson offline and asserts
+exactly-once event sync on both viewports; it also drove the dashboard progress-card
+fix after reload. The `POST /v1/parent/pin` limit of 5 requests per hour per client
+IP bounds local browser-test repeatability (see [verification.md](verification.md)).
 
 Acceptance: website and mobile complete login and authorized API calls against
 Keycloak; the API rejects every invalid token class; identity deletion is verified.

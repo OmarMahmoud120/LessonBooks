@@ -248,7 +248,47 @@ registers the `lessonbooks` scheme used as the redirect URI.
 Not verified: mobile login on a device or emulator (the redirect round trip needs a
 running app), SMTP for verification/reset, VPS issuer/TLS, Keycloak backup/restore
 and upgrade drills. The untracked `site/tests/browser/offline-sync.spec.ts` still
-fills the removed Firebase email/password form and fails until it drives the
-Keycloak redirect instead; it was left unmodified. Full `npm run lint`
-remains blocked by the unrelated untracked
-`site/tests/browser/offline-sync.spec.ts`.
+filled the removed Firebase email/password form at this point; it was rewritten and
+committed later the same day — see the offline-sync browser journey entry below.
+
+## Offline-sync browser journey — 2026-11-06
+
+The untracked offline-sync spec was rewritten for the Keycloak stack and committed
+(0bb0b67). It registers a synthetic family through the real Keycloak registration
+page (the local realm allows registration and does not require email verification),
+grants consent, creates a profile, sets the parent PIN, uploads the owned counting
+fixture, approves and assigns a draft, then finishes all five activities with the
+network offline and asserts that the queued events flush exactly once after the
+backend becomes reachable.
+
+Three timing issues were fixed while making it deterministic. The first family
+request creates the parent record, so the spec waits for it before granting consent;
+clicking faster failed the consent writes with `family_unavailable`. The desktop and
+mobile Playwright projects run in parallel, so the synthetic email gains a random
+suffix: same-millisecond usernames collided on Keycloak's unique
+`(realm_id, username)` key. The restart step reloads with only the backend requests
+aborted instead of emulating full offline: the site has no service worker, so a true
+offline reload cannot refetch the app itself. Queue persistence, failed-flush
+retention and exactly-once delivery are still asserted; a service-worker-backed
+offline reload remains unimplemented and unverified.
+
+The journey exposed a real site bug, fixed in f6ec0c1: the dashboard's `refresh()`
+read a stale `selectedKidId` closure, so the progress card never loaded after a
+plain reload and a kid-switcher click would fetch the previous child's progress.
+`refresh()` now resolves the kid from the fetched family and selection-changing
+callers pass the id explicitly. Unit coverage for this regression is still absent;
+only the browser journey catches it.
+
+`npm run test:player` passes 10/10 twice (eight example-mode player tests plus the
+offline-sync journey on both viewports); typecheck, repo-wide lint and the 249 unit
+tests pass, so the earlier lint block from the untracked spec is gone. The phase
+notes above that mention the untracked spec are historical records of those runs.
+
+Test-environment constraint: `POST /v1/parent/pin` is rate-limited to 5 requests per
+hour keyed by client IP (`backend/src/api.ts`, in-memory store). Both Playwright
+projects share 127.0.0.1, so one suite run consumes 2 of the 5; an exhausted quota
+returns an opaque 429 and the pin form stays open. During verification the quota was
+cleared by restarting `lessonbooks-api-1`. Repeatable browser testing needs one of:
+an environment-tunable limit with unchanged defaults, per-user keying for pin
+creation, or running the journey on the desktop project only. No rate-limit setting
+was changed for these runs.

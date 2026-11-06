@@ -1,6 +1,6 @@
 # Milestones
 
-Updated: 2026-11-05. Phase 0 and Phase 1 are in progress; Phase 2 is complete for the
+Updated: 2026-11-06. Phase 0 and Phase 1 are in progress; Phase 2 is complete for the
 local synthetic scope. The local synthetic-content vertical slice is implemented; the
 remaining criteria below prevent a full phase-complete claim.
 
@@ -121,7 +121,12 @@ JWKS, and account deletion also deletes the Keycloak identity
 ([ADR 0015](decisions/0015-keycloak-token-verification-and-admin-model.md)). The
 website and mobile app use OIDC login and no longer bundle the Firebase SDK. A
 Compose journey with `AUTH_PROVIDER=keycloak` passed end to end, and a real browser
-login with PKCE loaded the parent dashboard without console errors.
+login with PKCE loaded the parent dashboard without console errors. The committed
+offline-sync browser journey registers through the Keycloak page, completes a lesson
+offline and asserts exactly-once event sync on both viewports; it also drove a fix
+for the dashboard progress card not loading after a reload. `POST /v1/parent/pin`
+stays rate-limited to 5 requests per hour per client IP, which bounds local
+browser-test repeatability (see [verification.md](verification.md)).
 
 Real-PostgreSQL transaction verification, Firestore-to-Postgres wiring, polling
 dispatch changes, VPS provisioning and mobile-device login remain open. No VPS was
