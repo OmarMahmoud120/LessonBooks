@@ -121,6 +121,8 @@ Tasks:
       keep registration open, invite-only or admin-created.
 - [ ] Mobile login on a device or emulator, including the custom-scheme redirect.
 - [ ] Keycloak backup/restore and upgrade drills on the VPS.
+- [ ] Generate and inject the `lessonbooks-admin-panel` client secret (ADR 0016):
+      the realm import carries a local-only value that must be replaced on the VPS.
 
 Evidence: the Compose journey signs in with a synthetic Keycloak user, stores assets
 in Garage, completes the lesson pipeline and deletes both the family documents and

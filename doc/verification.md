@@ -356,3 +356,21 @@ received 403. Direct grants were toggled off afterwards.
 
 Boundary: the panel UI is still unbuilt — the ops surface is API-only. Phase C
 (moderation and support) remains future design.
+
+## Admin surface review — 2026-11-06
+
+The security and privacy reviewer roles were applied to the admin-surface diff by
+the implementing agent; this is a self-review, not independent reviewer coverage.
+Findings: the role gate rests on an RS256-verified realm-role claim that parents
+cannot mint; service-account tokens cannot reach the surface (no `sid`); every
+route requires recent authentication with fail-closed lookup; retry reuses the
+family retry bounds; job views and audit details carry opaque identifiers and
+counts, never book text or child nicknames. Three outcomes were recorded rather
+than coded: the VPS checklist now includes generating and injecting the
+`lessonbooks-admin-panel` secret, whose realm-import value is local-only; audit
+entries are intentionally not erased on family or account deletion because deletion
+actions must stay auditable and the entries hold no family content; and
+append-only is a service-level property — storage-level immutability is expected
+from Postgres permissions at the cutover. The 400-day retention window is a
+recorded engineering default; the production TTL remains an open launch decision
+per doc/privacy-compliance.md.
