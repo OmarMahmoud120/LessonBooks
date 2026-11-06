@@ -140,7 +140,7 @@ export function ParentApp() {
     if (!response.ok) throw new Error('request_failed');
     return response.json() as Promise<T>;
   }
-  async function refresh() {
+  async function refresh(forKidId?: string) {
     const owner = user?.uid;
     const family = await api<{
       kids: Kid[];
@@ -150,8 +150,13 @@ export function ParentApp() {
     if (!owner || owner !== user?.uid) return;
     setKids(family.kids);
     setPinSet(family.pin_set);
-    if (!family.kids.some((kid) => kid.id === selectedKidId))
-      setSelectedKidId(family.kids[0]?.id ?? null);
+    // The closure's selectedKidId can be stale (first load after sign-in or a
+    // switcher click that sets state); resolve the kid from the fetched family.
+    const kidId =
+      forKidId ??
+      (family.kids.some((kid) => kid.id === selectedKidId) ? selectedKidId : undefined) ??
+      family.kids[0]?.id;
+    if (kidId !== selectedKidId) setSelectedKidId(kidId ?? null);
     setConsented(
       ['privacy', 'content_rights'].every((type) => family.consents.some((c) => c.type === type)),
     );
@@ -165,8 +170,8 @@ export function ParentApp() {
         '/assignments',
       );
     if (owner === user?.uid) setAssignments(list);
-    if (owner === user?.uid && selectedKidId) {
-      setProgress(await api(`/kids/${selectedKidId}/progress`));
+    if (owner === user?.uid && kidId) {
+      setProgress(await api(`/kids/${kidId}/progress`));
     } else setProgress(null);
   }
   useEffect(() => {
@@ -422,7 +427,7 @@ export function ParentApp() {
                       aria-pressed={kid.id === selectedKid.id}
                       onClick={() => {
                         setSelectedKidId(kid.id);
-                        void refresh().catch(() => setError(t.error));
+                        void refresh(kid.id).catch(() => setError(t.error));
                       }}
                     >
                       {kid.nickname}
@@ -543,7 +548,7 @@ export function ParentApp() {
                   });
                   setSelectedKidId(created.id);
                   setAddingKid(false);
-                  await refresh();
+                  await refresh(created.id);
                 });
               }}
             >
@@ -594,7 +599,7 @@ export function ParentApp() {
                         setSelectedKidId(kid.id);
                         setJob(null);
                         setError('');
-                        void refresh().catch(() => setError(t.error));
+                        void refresh(kid.id).catch(() => setError(t.error));
                       }}
                     >
                       {kid.nickname}
