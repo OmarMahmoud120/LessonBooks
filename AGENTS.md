@@ -7,7 +7,9 @@ Current scope: Phase 0 foundations and Phase 1 parent preview. See doc/milestone
 
 - AI emits versioned lesson JSON, never executable HTML/JavaScript.
 - One TypeScript player serves the website and the mobile WebView.
-- Parent accounts only. Child profiles use nicknames, preset avatars and age bands;
+- Product surfaces are parent-only. Operator access is a separate role-gated,
+  audited account class (doc/decisions/0016-role-gated-admin-panel-on-the-self-hosted-vps.md).
+  Child profiles use nicknames, preset avatars and age bands;
   no birth dates, contact details, photos or other identifying fields.
 - Profiles and progress still count as personal data; never claim they are anonymous.
 - Every private resource belongs to one family. No public library or public lesson URLs.

@@ -134,6 +134,18 @@ provisioned, no data was migrated, and no live model or family-data use is
 authorized. Firestore still stores family documents and Cloud Tasks remains the
 cloud dispatch path. See [vps-migration.md](vps-migration.md).
 
+## Admin panel — 2026-11-06
+
+Decision recorded in
+[ADR 0016](decisions/0016-role-gated-admin-panel-on-the-self-hosted-vps.md):
+operators are a separate role-gated, audited account class on the existing Keycloak
+realm, the panel is a route in `site/` behind Caddy on the same VPS, and the
+append-only audit log ships before any capability. Phase A (identity, `/v1/admin/*`
+plumbing, audit log) is the first increment; Phase B (ops visibility) is sequenced
+behind the Postgres cutover; Phase C (moderation and support) follows. Nothing is
+implemented yet, and parent impersonation is rejected. Every admin-surface change
+requires the privacy-review skill before merge.
+
 ## Android native attempt — 2026-11-04
 
 Android CLI 1.1.16717390 built and installed the debug APK on Pixel_8_35
