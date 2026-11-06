@@ -1,15 +1,19 @@
 import {
+  CreateBucketCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import type { Assets } from './persistence';
 
-// Narrow transport so prefix pagination, batch deletion and error mapping can be
-// tested without an S3/MinIO server. The AWS adapter below is the production binding.
+// Narrow transport so prefix pagination, batch deletion, bucket creation and error
+// mapping can be tested without an S3/MinIO server. The AWS adapter below is the
+// production binding.
 export interface S3Transport {
+  ensureBucket(input: { bucket: string }): Promise<void>;
   put(input: {
     bucket: string;
     key: string;
@@ -24,6 +28,7 @@ export interface S3Transport {
 
 const DELETE_BATCH = 1000;
 const NOT_FOUND = new Set(['NoSuchKey', 'NotFound', 'NoSuchBucket']);
+const BUCKET_NAME = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
 
 function assertPath(path: string) {
   if (!path || path.startsWith('/') || path.includes('..')) throw new Error('invalid_asset_path');
@@ -33,7 +38,13 @@ export class S3Assets implements Assets {
   constructor(
     private transport: S3Transport,
     private bucket: string,
-  ) {}
+  ) {
+    if (!BUCKET_NAME.test(bucket)) throw new Error('invalid_bucket_name');
+  }
+
+  async init() {
+    await this.transport.ensureBucket({ bucket: this.bucket });
+  }
 
   async put(path: string, bytes: Uint8Array, contentType: string) {
     assertPath(path);
@@ -75,6 +86,18 @@ export class S3Assets implements Assets {
 
 export class AwsS3Transport implements S3Transport {
   constructor(private client: S3Client) {}
+
+  async ensureBucket(input: { bucket: string }) {
+    try {
+      await this.client.send(new HeadBucketCommand({ Bucket: input.bucket }));
+    } catch (error) {
+      const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata
+        ?.httpStatusCode;
+      const name = (error as { name?: string }).name;
+      if (status !== 404 && name !== 'NotFound' && name !== 'NoSuchBucket') throw error;
+      await this.client.send(new CreateBucketCommand({ Bucket: input.bucket }));
+    }
+  }
 
   async put(input: {
     bucket: string;
@@ -138,6 +161,10 @@ export function createS3Transport(settings: S3Settings) {
       endpoint: settings.endpoint,
       region: settings.region ?? 'us-east-1',
       forcePathStyle: true,
+      // Garage and other non-AWS S3 servers reject some default flexible checksums.
+      // Only send them when the operation requires one.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
       credentials: {
         accessKeyId: settings.accessKeyId,
         secretAccessKey: settings.secretAccessKey,

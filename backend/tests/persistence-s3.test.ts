@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { S3Assets, type S3Transport } from '../src/persistence-s3';
+import { AwsS3Transport, S3Assets, type S3Transport } from '../src/persistence-s3';
 
 type Stored = { bytes: Uint8Array; contentType: string; cacheControl: string };
 
 class MemoryTransport implements S3Transport {
   readonly objects = new Map<string, Stored>();
   readonly batches: number[] = [];
+  readonly buckets = new Set<string>();
+  readonly created: string[] = [];
   constructor(seed: string[] = []) {
     for (const key of seed)
       this.objects.set(key, {
@@ -13,6 +15,11 @@ class MemoryTransport implements S3Transport {
         contentType: 'application/octet-stream',
         cacheControl: 'private, no-store',
       });
+  }
+  async ensureBucket(input: { bucket: string }) {
+    if (this.buckets.has(input.bucket)) return;
+    this.buckets.add(input.bucket);
+    this.created.push(input.bucket);
   }
   async put(input: {
     bucket: string;
@@ -46,6 +53,19 @@ class MemoryTransport implements S3Transport {
 }
 
 describe('S3Assets', () => {
+  it('creates the configured bucket before first use', async () => {
+    const transport = new MemoryTransport();
+    const assets = new S3Assets(transport, 'lessonbooks');
+    await assets.init();
+    await assets.init();
+    expect(transport.created).toEqual(['lessonbooks']);
+  });
+
+  it('rejects an invalid bucket name before any request', () => {
+    expect(() => new S3Assets(new MemoryTransport(), 'Bad_Bucket')).toThrow('invalid_bucket_name');
+    expect(() => new S3Assets(new MemoryTransport(), 'ab')).toThrow('invalid_bucket_name');
+  });
+
   it('stores private bytes with content type and no-store cache control', async () => {
     const transport = new MemoryTransport();
     const assets = new S3Assets(transport, 'lessonbooks');
@@ -117,5 +137,47 @@ describe('S3Assets', () => {
     );
     await expect(assets.deletePrefix('families/../bob')).rejects.toThrow('invalid_asset_path');
     expect(transport.objects.size).toBe(0);
+  });
+});
+
+describe('AwsS3Transport bucket bootstrap', () => {
+  function fakeClient(handler: (name: string) => void) {
+    return {
+      async send(command: { constructor: { name: string } }) {
+        handler(command.constructor.name);
+        return {};
+      },
+    };
+  }
+
+  it('creates the bucket only when HeadBucket reports 404', async () => {
+    const sent: string[] = [];
+    const client = fakeClient((name) => {
+      sent.push(name);
+      if (name === 'HeadBucketCommand')
+        throw Object.assign(new Error('missing'), { $metadata: { httpStatusCode: 404 } });
+    });
+    await new AwsS3Transport(client as never).ensureBucket({ bucket: 'lessonbooks' });
+    expect(sent).toEqual(['HeadBucketCommand', 'CreateBucketCommand']);
+  });
+
+  it('leaves an existing bucket untouched', async () => {
+    const sent: string[] = [];
+    await new AwsS3Transport(fakeClient((name) => sent.push(name)) as never).ensureBucket({
+      bucket: 'lessonbooks',
+    });
+    expect(sent).toEqual(['HeadBucketCommand']);
+  });
+
+  it('does not create a bucket when HeadBucket fails for another reason', async () => {
+    const sent: string[] = [];
+    const client = fakeClient((name) => {
+      sent.push(name);
+      throw Object.assign(new Error('denied'), { $metadata: { httpStatusCode: 403 } });
+    });
+    await expect(
+      new AwsS3Transport(client as never).ensureBucket({ bucket: 'lessonbooks' }),
+    ).rejects.toThrow('denied');
+    expect(sent).toEqual(['HeadBucketCommand']);
   });
 });

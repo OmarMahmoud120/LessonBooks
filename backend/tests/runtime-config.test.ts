@@ -12,6 +12,14 @@ const cloudEnv = {
   SERVICE_ROLE: 'worker',
   HOST: '0.0.0.0',
 };
+const s3Env = {
+  ASSET_STORE: 's3',
+  S3_ENDPOINT: 'http://garage:3900',
+  S3_BUCKET: 'lessonbooks',
+  S3_REGION: 'garage',
+  S3_ACCESS_KEY_ID: 'GK0123456789abcdef0123456789abcdef',
+  S3_SECRET_ACCESS_KEY: 'a'.repeat(64),
+};
 it('keeps host defaults emulator-only with combined local processes', () => {
   expect(runtimeConfig({})).toMatchObject({
     mode: 'emulator',
@@ -19,7 +27,40 @@ it('keeps host defaults emulator-only with combined local processes', () => {
     host: '127.0.0.1',
     port: 3001,
     requireScan: false,
+    assets: { kind: 'firebase' },
   });
+});
+it('accepts a loopback Garage endpoint for private assets', () => {
+  expect(runtimeConfig(s3Env)).toMatchObject({
+    mode: 'emulator',
+    assets: {
+      kind: 's3',
+      endpoint: 'http://garage:3900',
+      bucket: 'lessonbooks',
+      region: 'garage',
+    },
+  });
+  expect(runtimeConfig({ ...s3Env, S3_ENDPOINT: 'http://127.0.0.1:3900' }).assets).toMatchObject({
+    endpoint: 'http://127.0.0.1:3900',
+  });
+});
+it.each([
+  { ASSET_STORE: 'minio' },
+  { ...s3Env, S3_ENDPOINT: '' },
+  { ...s3Env, S3_ENDPOINT: 'garage:3900' },
+  { ...s3Env, S3_ENDPOINT: 'http://garage:9000' },
+  { ...s3Env, S3_ENDPOINT: 'http://example.com:3900' },
+  { ...s3Env, S3_ENDPOINT: 'https://garage:3900' },
+  { ...s3Env, S3_ENDPOINT: 'http://user:pass@garage:3900' },
+  { ...s3Env, S3_ENDPOINT: 'http://garage:3900/bucket' },
+  { ...s3Env, S3_BUCKET: 'Bad_Bucket' },
+  { ...s3Env, S3_REGION: 'EU West' },
+  { ...s3Env, S3_ACCESS_KEY_ID: 'short' },
+  { ...s3Env, S3_ACCESS_KEY_ID: '' },
+  { ...s3Env, S3_SECRET_ACCESS_KEY: 'short' },
+  { ...cloudEnv, ASSET_STORE: 's3' },
+])('rejects unsafe S3 asset settings %j', (env) => {
+  expect(() => runtimeConfig(env)).toThrow();
 });
 it('supports separate container roles, known emulator DNS and required scanning', () => {
   expect(

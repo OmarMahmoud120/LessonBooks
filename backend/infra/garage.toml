@@ -1,0 +1,17 @@
+# Local development only. Every value here is synthetic and bound to the local
+# Compose network. A VPS deployment must generate its own rpc_secret and access
+# keys, keep them outside source control, and never reuse these values.
+metadata_dir = "/data/meta"
+data_dir = "/data/data"
+db_engine = "sqlite"
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "5b1d0f9c8e7a6b4d3c2f1e0d9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage.localhost"
+public_endpoint = "http://127.0.0.1:3900"

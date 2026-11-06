@@ -4,7 +4,8 @@ import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import { FirestoreRepository, StorageAssets } from './persistence';
+import { FirestoreRepository, StorageAssets, type Assets } from './persistence';
+import { S3Assets, createS3Transport } from './persistence-s3';
 import { FamilyService } from './family';
 import { createAPI } from './api';
 import { Pipeline } from './pipeline';
@@ -22,7 +23,14 @@ const firebase = initializeApp({ projectId, storageBucket: `${projectId}.appspot
 Object.assign(process.env, config.endpoints);
 const auth = getAuth(firebase);
 const repo = new FirestoreRepository(getFirestore(firebase));
-const assets = new StorageAssets(getStorage(firebase).bucket());
+let assets: Assets;
+if (config.assets.kind === 's3') {
+  const s3 = new S3Assets(createS3Transport(config.assets), config.assets.bucket);
+  await s3.init();
+  assets = s3;
+} else {
+  assets = new StorageAssets(getStorage(firebase).bucket());
+}
 const families = new FamilyService(repo, assets, async (uid) => {
   try {
     await auth.deleteUser(uid);

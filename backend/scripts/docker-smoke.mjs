@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { GetObjectCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
 const base = 'http://127.0.0.1:3001/v1';
 const authURL =
   'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-lessonbooks';
@@ -14,6 +15,57 @@ const signup = await fetch(authURL, {
 });
 assert.equal(signup.status, 200);
 const { idToken } = await signup.json();
+const uid = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64url').toString()).user_id;
+assert.ok(uid);
+// The Compose stack stores assets in Garage. These are the local synthetic
+// credentials from compose.yaml, not a supported production configuration.
+const s3 = new S3Client({
+  endpoint: process.env.S3_ENDPOINT ?? 'http://127.0.0.1:3900',
+  region: process.env.S3_REGION ?? 'garage',
+  forcePathStyle: true,
+  requestChecksumCalculation: 'WHEN_REQUIRED',
+  responseChecksumValidation: 'WHEN_REQUIRED',
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY_ID ?? 'GK0123456789abcdef0123456789abcdef',
+    secretAccessKey:
+      process.env.S3_SECRET_ACCESS_KEY ??
+      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  },
+});
+const bucket = process.env.S3_BUCKET ?? 'lessonbooks';
+async function listStored(prefix) {
+  const response = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix }));
+  return (response.Contents ?? []).flatMap((object) => (object.Key ? [object.Key] : []));
+}
+async function waitForStoredPdf(prefix) {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const key = (await listStored(prefix)).find((candidate) => candidate.endsWith('.pdf'));
+    if (key) {
+      const object = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      assert.ok(object.Body);
+      const bytes = await object.Body.transformToByteArray();
+      assert.equal(Buffer.from(bytes.subarray(0, 4)).toString(), '%PDF');
+      const anonymous = await fetch(
+        `${process.env.S3_ENDPOINT ?? 'http://127.0.0.1:3900'}/${bucket}/${key
+          .split('/')
+          .map(encodeURIComponent)
+          .join('/')}`,
+      );
+      assert.equal(anonymous.status, 403, 'anonymous object access must be denied');
+      console.log(`Garage stored ${key} (${bytes.length} bytes; anonymous access 403)`);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  assert.fail(`no PDF object stored under ${prefix}`);
+}
+async function waitForEmptyPrefix(prefix) {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    if ((await listStored(prefix)).length === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  assert.fail(`objects remain under ${prefix}`);
+}
 async function api(path, options = {}) {
   const response = await fetch(base + path, {
     ...options,
@@ -72,6 +124,7 @@ try {
   }
   const kid = await createKid('DockerFox', 'en-GB');
   await upload(kid.id, 'counting.pdf');
+  await waitForStoredPdf(`families/${uid}/kids/${kid.id}/`);
   let lessons = await waitLessons(3);
   const first = await api(`/lessons/${lessons[0].id}`);
   await api(`/lessons/${lessons[0].id}/approve`, {
@@ -79,19 +132,23 @@ try {
     body: JSON.stringify({ revision: first.revision }),
   });
   await api(`/kids/${kid.id}`, { method: 'DELETE' });
+  await waitForEmptyPrefix(`families/${uid}/kids/${kid.id}/`);
   assert.equal((await api('/lessons')).length, 0);
   // Phase 1 allows one kid per family, so the Arabic journey reuses the freed slot.
   const arabicKid = await createKid('DockerArousa', 'ar');
   await upload(arabicKid.id, 'arabic-counting-scanned.pdf');
+  await waitForStoredPdf(`families/${uid}/kids/${arabicKid.id}/`);
   lessons = await waitLessons(3);
   const arabicFirst = await api(`/lessons/${lessons[0].id}`);
   assert.equal(arabicFirst.lesson.metadata.language, 'ar');
   assert.equal(arabicFirst.lesson.metadata.direction, 'rtl');
   await api(`/kids/${arabicKid.id}`, { method: 'DELETE' });
+  await waitForEmptyPrefix(`families/${uid}/kids/${arabicKid.id}/`);
   assert.equal((await api('/lessons')).length, 0);
   console.log(
-    'Docker smoke passed: auth, consent, owned PDFs, virus-scanned ingestion, Arabic OCR by a separate worker, mocked Arabic lessons, approval, deletion.',
+    'Docker smoke passed: auth, consent, owned PDFs, virus-scanned ingestion, Arabic OCR by a separate worker, mocked Arabic lessons, approval, deletion, and private Garage objects.',
   );
 } finally {
   await api('/account', { method: 'DELETE' });
+  await waitForEmptyPrefix(`families/${uid}/`);
 }

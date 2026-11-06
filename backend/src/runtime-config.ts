@@ -1,4 +1,14 @@
 export type RuntimeMode = 'emulator' | 'cloud';
+export type AssetConfig =
+  | { kind: 'firebase' }
+  | {
+      kind: 's3';
+      endpoint: string;
+      bucket: string;
+      region: string;
+      accessKeyId: string;
+      secretAccessKey: string;
+    };
 export type RuntimeConfig = {
   mode: RuntimeMode;
   role: 'api' | 'worker' | 'all';
@@ -7,6 +17,7 @@ export type RuntimeConfig = {
   requireScan: boolean;
   ocrProvider: 'local' | 'cloudflare';
   ocrMaxRequests: number;
+  assets: AssetConfig;
   endpoints: Record<string, string>;
   projectId?: string;
   queuePath?: string;
@@ -16,6 +27,43 @@ export type RuntimeConfig = {
 function pattern(value: string, expression: RegExp, code: string): string {
   if (!expression.test(value)) throw new Error(code);
   return value;
+}
+const BUCKET_NAME = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+function s3Assets(env: Record<string, string | undefined>, mode: RuntimeMode): AssetConfig {
+  if (mode === 'cloud') throw new Error('s3_assets_not_supported_in_cloud_mode');
+  let endpoint: URL;
+  try {
+    endpoint = new URL(env.S3_ENDPOINT ?? '');
+  } catch {
+    throw new Error('invalid_s3_endpoint');
+  }
+  if (
+    endpoint.protocol !== 'http:' ||
+    endpoint.username ||
+    endpoint.password ||
+    endpoint.search ||
+    endpoint.hash ||
+    endpoint.pathname !== '/' ||
+    endpoint.port !== '3900' ||
+    !['127.0.0.1', 'localhost', 'garage'].includes(endpoint.hostname)
+  )
+    throw new Error('invalid_s3_endpoint');
+  return {
+    kind: 's3',
+    endpoint: endpoint.origin,
+    bucket: pattern(env.S3_BUCKET ?? '', BUCKET_NAME, 'invalid_s3_bucket'),
+    region: pattern(env.S3_REGION ?? 'garage', /^[a-z0-9-]{1,32}$/, 'invalid_s3_region'),
+    accessKeyId: pattern(
+      env.S3_ACCESS_KEY_ID ?? '',
+      /^[A-Za-z0-9]{16,128}$/,
+      'invalid_s3_access_key',
+    ),
+    secretAccessKey: pattern(
+      env.S3_SECRET_ACCESS_KEY ?? '',
+      /^[A-Za-z0-9+/=_-]{8,256}$/,
+      'invalid_s3_secret_key',
+    ),
+  };
 }
 export function runtimeConfig(env: Record<string, string | undefined>): RuntimeConfig {
   const ocrProvider = env.OCR_PROVIDER ?? 'local';
@@ -27,6 +75,12 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
   const selected = roles.find((candidate) => candidate === env.SERVICE_ROLE);
   if (env.SERVICE_ROLE !== undefined && !selected) throw new Error('invalid_service_role');
   const role: (typeof roles)[number] = selected ?? 'all';
+  const assetStore = env.ASSET_STORE ?? 'firebase';
+  if (assetStore !== 'firebase' && assetStore !== 's3') throw new Error('invalid_asset_store');
+  const assets: AssetConfig =
+    assetStore === 's3'
+      ? s3Assets(env, env.CLOUD_RUNTIME_APPROVED === 'true' ? 'cloud' : 'emulator')
+      : { kind: 'firebase' };
   let ocrMaxRequests = 0;
   if (ocrProvider === 'cloudflare') {
     // The selectable hosted path is restricted to owned fixtures in the emulator runtime.
@@ -95,6 +149,7 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
       requireScan: env.REQUIRE_SCAN !== 'false',
       ocrProvider,
       ocrMaxRequests,
+      assets,
       endpoints: {},
       projectId,
       queuePath: `projects/${projectId}/locations/${location}/queues/${queue}`,
@@ -125,6 +180,7 @@ export function runtimeConfig(env: Record<string, string | undefined>): RuntimeC
     requireScan: env.REQUIRE_SCAN === 'true',
     ocrProvider,
     ocrMaxRequests,
+    assets,
     endpoints,
   };
 }
