@@ -292,3 +292,35 @@ cleared by restarting `lessonbooks-api-1`. Repeatable browser testing needs one 
 an environment-tunable limit with unchanged defaults, per-user keying for pin
 creation, or running the journey on the desktop project only. No rate-limit setting
 was changed for these runs.
+
+## Admin panel phase A — 2026-11-06
+
+Implemented the ADR 0016 first increment on the Keycloak path: realm roles now ride
+the access token into `Identity`, an append-only `AuditLog` service records one
+entry per admin action through a repository transaction, and `/v1/admin/audit`
+returns recent entries to identities holding the `lessonbooks-admin` realm role with
+a session proven recent — failing closed when the lookup fails, refusing parents
+with 403 and anonymous callers with 401. The route is not registered unless an audit
+log is provided. `backend/infra/keycloak/realm-lessonbooks.json` gains the
+`lessonbooks-admin` realm role, a confidential `lessonbooks-admin-panel` client with
+the `lessonbooks-api` audience mapper, its service account holding the role, and a
+synthetic `local-operator` user for local verification.
+
+Tests: 11 new unit tests cover token role extraction (including a non-string claim
+filtered out), audit ordering and limit bounds, and every gate outcome — allowed,
+403 without or with an unrelated role, 401 without a token, 401 on a stale session,
+401 fail-closed, malformed limit rejection and the route's absence without an audit
+log. `npm run check:fast` passes 260 unit tests; lint and typecheck pass.
+
+Live evidence against the Compose stack: the realm JSON imported cleanly into a
+throwaway realm (201, client and operator present, realm deleted afterwards). The
+same objects were applied to the running realm, the API image was rebuilt, and a
+password-grant operator token returned 200 with the previous read recorded as one
+audit entry (second read listed exactly that entry), while the synthetic parent got
+403 and an anonymous call got 401. Direct grants were toggled off afterwards.
+
+Boundaries: client-credentials tokens carry no `sid`, so service accounts cannot
+pass token verification or recent-auth even with the role — the admin surface is
+interactive-login only. The audit log has no retention or export decision yet; that
+must be recorded before any real family data flows through operator tooling. The
+panel UI itself is Phase B, sequenced behind the Postgres cutover per ADR 0016.

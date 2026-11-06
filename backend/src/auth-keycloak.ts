@@ -130,8 +130,14 @@ export class KeycloakTokens {
     const sid = payload.sid;
     if (typeof uid !== 'string' || !uid) throw new Error('unauthenticated');
     if (typeof sid !== 'string' || !sid) throw new Error('unauthenticated');
+    const claims = payload as { realm_access?: { roles?: unknown } };
+    const claimed = claims.realm_access?.roles;
+    const roles = Array.isArray(claimed)
+      ? claimed.filter((role): role is string => typeof role === 'string')
+      : [];
     return {
       uid,
+      roles: roles.length ? roles : undefined,
       // Resolved only by endpoints that require a recent interactive login.
       auth_time: () => this.authTime(uid, sid),
     };

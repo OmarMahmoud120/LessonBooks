@@ -29,12 +29,14 @@ async function accessToken(
     sub?: string;
     sid?: string | null;
     expiresIn?: string;
+    realmRoles?: string[];
   } = {},
 ) {
   const builder = new SignJWT({
     sid: overrides.sid === undefined ? 'session-1' : overrides.sid,
     typ: 'Bearer',
     azp: 'lessonbooks-site',
+    ...(overrides.realmRoles ? { realm_access: { roles: overrides.realmRoles } } : {}),
   })
     .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
     .setIssuer(overrides.iss ?? issuer)
@@ -84,6 +86,15 @@ describe('KeycloakTokens', () => {
     const identity = await verifier().verify(await accessToken());
     expect(identity.uid).toBe('parent-1');
     expect(typeof identity.auth_time).toBe('function');
+  });
+
+  it('exposes realm roles and omits the field when the claim is absent', async () => {
+    const operator = await verifier().verify(
+      await accessToken({ realmRoles: ['lessonbooks-admin', 42 as never] }),
+    );
+    expect(operator.roles).toEqual(['lessonbooks-admin']);
+    const parent = await verifier().verify(await accessToken());
+    expect(parent.roles).toBeUndefined();
   });
 
   it.each([

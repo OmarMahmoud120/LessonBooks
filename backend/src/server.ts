@@ -8,6 +8,7 @@ import { FirestoreRepository, StorageAssets, type Assets } from './persistence';
 import { S3Assets, createS3Transport } from './persistence-s3';
 import { KeycloakAdmin, KeycloakTokens } from './auth-keycloak';
 import { FamilyService } from './family';
+import { AuditLog } from './admin';
 import { createAPI } from './api';
 import { Pipeline } from './pipeline';
 import { createRuntimeIngestor } from './runtime-ingestor';
@@ -59,6 +60,7 @@ const families = new FamilyService(repo, assets, async (uid) => {
   }
 });
 const pipeline = new Pipeline(families, ingestor, new RoutedAI(new MockModelClient(), mockPolicy));
+const audit = new AuditLog(repo);
 const app =
   config.mode === 'cloud' && config.role === 'worker'
     ? createWorkerApp(
@@ -66,10 +68,10 @@ const app =
         new CloudTasksOidcVerifier(config.workerUrl!, config.workerServiceAccount!),
       )
     : config.mode === 'cloud' && config.role === 'api'
-      ? await createAPI(families, verifyToken)
+      ? await createAPI(families, verifyToken, audit)
       : config.role === 'worker'
         ? Fastify({ logger: false })
-        : await createAPI(families, verifyToken);
+        : await createAPI(families, verifyToken, audit);
 if (config.role === 'worker' && config.mode === 'emulator')
   app.get('/health', async () => ({ status: 'ok', mode: 'mock-worker' }));
 let running = false;

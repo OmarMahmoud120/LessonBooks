@@ -26,6 +26,14 @@
   "supportedLocales": ["en", "ar"],
   "defaultLocale": "en",
   "passwordPolicy": "length(12) and notUsername and notEmail",
+  "roles": {
+    "realm": [
+      {
+        "name": "lessonbooks-admin",
+        "description": "Operator access to the admin panel and admin API (ADR 0016)"
+      }
+    ]
+  },
   "clients": [
     {
       "clientId": "lessonbooks-site",
@@ -104,6 +112,40 @@
       "attributes": {
         "access.token.signed.response.alg": "RS256"
       }
+    },
+    {
+      "clientId": "lessonbooks-admin-panel",
+      "name": "LessonBooks admin panel",
+      "description": "Confidential operator client for the admin surface (ADR 0016)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "local-only-admin-panel-secret-0123456789",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "bearerOnly": false,
+      "redirectUris": ["http://127.0.0.1:5173/admin"],
+      "webOrigins": ["http://127.0.0.1:5173"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://127.0.0.1:5173/admin",
+        "access.token.signed.response.alg": "RS256"
+      },
+      "protocolMappers": [
+        {
+          "name": "lessonbooks-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "lessonbooks-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -114,6 +156,28 @@
       "clientRoles": {
         "realm-management": ["view-users", "manage-users"]
       }
+    },
+    {
+      "username": "service-account-lessonbooks-admin-panel",
+      "enabled": true,
+      "serviceAccountClientId": "lessonbooks-admin-panel",
+      "realmRoles": ["lessonbooks-admin"]
+    },
+    {
+      "username": "local-operator",
+      "enabled": true,
+      "email": "local-operator@example.test",
+      "emailVerified": true,
+      "firstName": "Local",
+      "lastName": "Operator",
+      "realmRoles": ["lessonbooks-admin"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "SyntheticLocalOperator2026",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "local-parent",

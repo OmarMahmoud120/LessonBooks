@@ -141,10 +141,11 @@ Decision recorded in
 operators are a separate role-gated, audited account class on the existing Keycloak
 realm, the panel is a route in `site/` behind Caddy on the same VPS, and the
 append-only audit log ships before any capability. Phase A (identity, `/v1/admin/*`
-plumbing, audit log) is the first increment; Phase B (ops visibility) is sequenced
-behind the Postgres cutover; Phase C (moderation and support) follows. Nothing is
-implemented yet, and parent impersonation is rejected. Every admin-surface change
-requires the privacy-review skill before merge.
+plumbing, audit log) is implemented and verified — see
+[verification.md](verification.md); the audit log retention decision is still open.
+Phase B (ops visibility) is sequenced behind the Postgres cutover; Phase C
+(moderation and support) follows. Parent impersonation is rejected. Every
+admin-surface change requires the privacy-review skill before merge.
 
 ## Android native attempt — 2026-11-04
 

@@ -4,11 +4,24 @@ import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import { DomainError, familyPath, type Job, type Kid, type LessonRecord } from './domain';
 import { FamilyService } from './family';
+import { AuditLog } from './admin';
 import catalog from '../../doc/curricula/england.json';
+
+// Realm role that marks an operator identity (ADR 0016). Interactive logins only:
+// client-credentials tokens carry no `sid`, so service accounts cannot reach the
+// admin surface even when their client holds the role.
+const ADMIN_ROLE = 'lessonbooks-admin';
+const DEFAULT_AUDIT_LIMIT = 50;
 
 // Identity providers that cannot put a trustworthy authentication time in the
 // access token resolve it lazily, so no extra lookup happens on ordinary requests.
-export type Identity = { uid: string; auth_time: number | (() => Promise<number>) };
+// Roles come from the identity provider's realm-role claim; the Firebase provider
+// sets none, so admin routes fail closed under it.
+export type Identity = {
+  uid: string;
+  roles?: string[] | undefined;
+  auth_time: number | (() => Promise<number>);
+};
 export async function authTime(identity: Identity): Promise<number> {
   return typeof identity.auth_time === 'function' ? identity.auth_time() : identity.auth_time;
 }
@@ -26,6 +39,7 @@ async function requireRecentAuth(identity: Identity) {
 export async function createAPI(
   families: FamilyService,
   verify: (token: string) => Promise<Identity>,
+  audit?: AuditLog,
 ) {
   const app = Fastify({
     logger: false,
@@ -309,5 +323,40 @@ export async function createAPI(
       return record;
     },
   );
+  // Admin surface (ADR 0016): a separate role-gated operator account class. Every
+  // admin action is recorded in the append-only audit log before it is answered,
+  // and every check fails closed. Not registered until an audit log is provided.
+  if (audit) {
+    const adminIdentity = (request: object): Identity => {
+      const identity = identities.get(request)!;
+      if (!identity.roles?.includes(ADMIN_ROLE)) throw new DomainError('forbidden', 403);
+      return identity;
+    };
+    app.get<{ Querystring: { limit?: string } }>(
+      '/v1/admin/audit',
+      {
+        schema: {
+          querystring: {
+            type: 'object',
+            properties: { limit: { type: 'string', pattern: '^[0-9]{1,3}$' } },
+            additionalProperties: false,
+          },
+        },
+      },
+      async (request) => {
+        const identity = adminIdentity(request);
+        // Reading the audit log is itself sensitive: it exposes operator activity.
+        await requireRecentAuth(identity);
+        const limit = Number(request.query.limit ?? String(DEFAULT_AUDIT_LIMIT));
+        const entries = await audit.list(limit);
+        await audit.record(
+          'admin.audit.list',
+          identity.uid,
+          `limit=${limit} returned=${entries.length}`,
+        );
+        return { entries };
+      },
+    );
+  }
   return app;
 }
