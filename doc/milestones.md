@@ -104,8 +104,11 @@ remain the active runtime until later phases land.
 
 Phase 1 is implemented but not wired in: `PostgresRepository` covers path reads,
 direct-child listing, serializable transactions and prefix deletion, with 11 tests
-including a `FamilyService` create/delete scenario. Real-PostgreSQL transaction
-verification, adapters for assets, auth, dispatch and client changes remain open.
+including a `FamilyService` create/delete scenario. Phase 2's `S3Assets` adapter is
+also implemented behind the existing `Assets` interface with 6 transport tests for
+private writes, prefix isolation and >1000-object batching; no MinIO service or
+runtime wiring exists yet. Real-PostgreSQL transaction verification, real-MinIO
+verification, Keycloak auth, dispatch and client changes remain open.
 No VPS was provisioned, no data was migrated, no Google dependency was removed from
 the running app, and no live model or family-data use is authorized. See
 [vps-migration.md](vps-migration.md).

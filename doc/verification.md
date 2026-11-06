@@ -169,7 +169,7 @@ tracked configuration restored afterward. Host Node remains 23.7.0; supported
 Node >=24 execution is still unverified. No live provider call, download, push or
 deployment was performed for the selector.
 
-## VPS migration phase 1 — PostgreSQL repository — 2026-11-06
+## VPS migration phases 1–2 — PostgreSQL and S3 adapters — 2026-11-06
 
 Added `backend/src/persistence-postgres.ts` behind the existing `Repository`
 interface and 11 tests in `backend/tests/persistence-postgres.test.ts`. Tests cover
@@ -180,8 +180,13 @@ scenario, and commit/rollback/serialization-retry control with an injected pool.
 rollback and serialization retries are asserted through the injected pool and still
 require verification on real PostgreSQL before cutover.
 
-The adapter is not wired into `server.ts`; Firestore remains active. `npm test`
-passes 188 unit tests and `npm run typecheck` passes. Full `npm run lint` is
-temporarily blocked by an unrelated untracked `site/tests/browser/offline-sync.spec.ts`
-from other work; the changed files pass targeted ESLint and Prettier checks. No
-database, VPS, Google resource, provider call or deployment was created or changed.
+Added `backend/src/persistence-s3.ts` with `S3Assets` and an AWS S3-compatible
+transport, plus 6 tests for private writes, missing-object mapping, directory and
+exact-path deletion, >1000-object batching and path validation. Neither adapter is
+wired into `server.ts`; Firestore and Cloud Storage remain active. No PostgreSQL,
+MinIO, VPS, Google resource, provider call or deployment was created or changed.
+
+`npm test` passes 194 unit tests and `npm run typecheck` passes. Full `npm run lint`
+is temporarily blocked by an unrelated untracked
+`site/tests/browser/offline-sync.spec.ts` from other work; the changed files pass
+targeted ESLint and Prettier checks.

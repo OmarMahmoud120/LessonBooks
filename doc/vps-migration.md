@@ -49,16 +49,30 @@ Acceptance: `FamilyService`, `Pipeline` and `OutboxSweeper` tests pass unchanged
 against the Postgres repository, and the real-Postgres transaction check above is
 recorded.
 
-## Phase 2 — MinIO asset store
+## Phase 2 — MinIO asset store (adapter implemented, integration pending)
 
 Tasks:
 
-- Implement `S3Assets` against an S3-compatible endpoint (MinIO), or the S3 SDK.
-- Private buckets only; no anonymous read, no public object URLs.
-- Content type and `private, no-store` metadata preserved where supported.
-- Prefix deletion used by job/child/account deletion.
-- Compose service with an internal network, persistent volume and health check.
-- Tests: put/get/deletePrefix, missing asset, deletion race, credential redaction.
+- [x] Implement `S3Assets` over a narrow `S3Transport` and the AWS S3-compatible
+      adapter in `backend/src/persistence-s3.ts`; `@aws-sdk/client-s3` is the only new
+      runtime dependency.
+- [x] Private objects only: no public ACLs, no signed URLs, `private, no-store`
+      cache control and the existing content type.
+- [x] Prefix deletion used by job/child/account deletion, exact-path deletion for
+      replaced uploads, and batch deletion at the S3 limit of 1000 objects.
+- [x] Reject empty, absolute and parent-traversing keys before transport.
+- [x] Tests: put/get metadata, missing-object mapping, directory prefix isolation,
+      exact-path deletion, >1000-object batching and key validation.
+- [ ] Compose MinIO service on the private network with a persistent volume, health
+      check and backup path.
+- [ ] Wire `S3Assets` into the runtime and run the emulator vertical journey with
+      files stored in MinIO.
+- [ ] Verify against a real MinIO/S3 endpoint, including credentials, bucket policy,
+      deletion and a restore drill.
+
+Evidence: 6 new tests pass against an in-memory transport. The adapter is not wired
+into `server.ts`; Firestore/Cloud Storage remain active. No bucket or MinIO service
+was created.
 
 Acceptance: the emulator vertical journey passes with files stored in MinIO and the
 same family-scoped deletion behavior.
