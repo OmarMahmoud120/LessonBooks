@@ -181,6 +181,14 @@ Tasks:
 - Secrets via Docker secrets/SOPS/Vault, never committed; `.env` remains excluded.
   Generate and inject the `lessonbooks-admin-panel` client secret; the realm import
   value is local-only.
+- Before any public exposure, replace the synthetic seed accounts and rotate both
+  confidential client secrets in the realm, and re-seed `local-admin` (security
+  review of the 2026-11-07 removal).
+- When the runtime validators gain https/real-hostname support (above), the embedded
+  loopback defaults in `backend/src/runtime-config.ts` must become required with no
+  default — fail closed on unset — and the `NODE_ENV=production` refusal must be
+  replaced by a reviewed production path. Env injection alone cannot configure a VPS
+  (privacy review of the 2026-11-07 removal).
 - Monitoring: uptime, disk, memory, backup success, queue depth, failed jobs.
 - Log scrubbing; no book text, tokens, child names or credentials.
 - Patch policy and migration/rollback runbook.

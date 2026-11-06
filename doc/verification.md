@@ -486,3 +486,31 @@ on the live stack; `docker compose down/up` rebuilt without the emulators servic
 (6 healthy services, orphan container and its volume removed) and `npm run
 docker:test` passed the full journey again. `npm run deploy` still exits 1 with the
 new VPS settings checklist. No live model, family data, push or deploy happened.
+
+## Removal review outcomes — 2026-11-07
+
+Two independent reviewer agents ran against `pre-firebase-removal..feat/remove-google-runtime`
+before merge: the security-reviewer and privacy-reviewer roles (repo reviewer-tool
+coverage, not human sign-off). Both verdicts: safe to merge, no P0/P1 findings.
+
+Security: runtime validators remain fail-closed (`firebase`/`minio`/`mongo` values are
+rejected by tests), the production/live-AI refusal is now unconditional with no cloud
+escape hatch, `/v1/internal/jobs` and every Cloud Tasks path are gone, family
+namespacing and the verified-`sub` charset guard hold, all compose publishes stay on
+loopback, and the deploy gate cannot succeed. Fixed from the review: backend/README.md
+no longer instructs `npm run emulators`, Firebase emulator tokens, `test:rules` or
+Cloud Tasks dispatch. Recorded as phase-5 VPS checklist items: rotate the synthetic
+seed accounts and both confidential client secrets before public exposure, and give
+garage/postgres/keycloak-db a `private`-only network where they need no egress.
+
+Privacy: deletion parity confirmed against the pre-removal server (erase documents and
+assets before identity removal, tombstone survives and blocks recreation, resumable
+retry, deletion verification covers repository and identity provider and never caches).
+The data-map rewrites match the code. Synthetic loopback credentials in
+`runtime-config.ts` carry the same values compose.yaml already had, behind four
+fail-closed gates; recorded as a phase-5 requirement that they become
+required-with-no-default once the validators support real https endpoints. Data-map
+gaps fixed from the review: the family PIN credential now has a privacy-table row and
+the `lessonbooks-parent-unlocked` sessionStorage flag is disclosed. Pre-existing gaps
+re-confirmed, unchanged by this branch: deletion verification does not yet count the
+Garage asset prefix, and the subject-access export carries asset references, not bytes.
